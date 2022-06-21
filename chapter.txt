@@ -2422,7 +2422,301 @@ the timeout is how long it's going to wait before it errors out and returns a ba
 the start period is a new feature that allows us now in 17.09 and newer to give a longer wait period than the first 30 seconds of the duration before  it will always just wait
 the long....the interval time before it started the healtcheck but maybe you have a java app or database or something that takes a lot longer to start, maybe it takes five minutes.
 so you could add that start period in there it will still do healtchecks.
-but what it will do is it wont alarm on an unhealthy check until that time has elapsed  5.20....   
+but what it will do is it wont alarm on an unhealthy check until that time has elapsed  so if you set two minutes in there even though it's health checking every 30 seconds it's going to only 
+consider it unhealthy once it's past that two minute mark.
+the last one ther retries means that we will try this health x number of times before we consider it unhealthy, and that gives maybe a potentially unstable app a chance to come back with a healthy and recover on 
+its own before we consider this a truly unhealthy container 
+
+----------------------------------------------------
+basic command using defaults options 
+HEALTCHECK curl -f http://localhost/ || false
+----------------------------------------------------
+
+the basic healthcheck command you would use in a dockerfile is called HEALTHCHECK (all capital letters there).
+the same format exists where if we're just doing a simple cURL of the localhost because maybe it's a PHP app or something.
+we can do that 
+
+----------------------------------------------------------------------------------------------
+custom options with the command
+HEALTHCHECK --TIMEOUT=2s --interval=3s --retries=3 \ 
+CMD curl -f http://localhost/ || exit 1
+----------------------------------------------------------------------------------------------
+
+and this is how you add those options in to a dockerfile so you would see how i add the timeout interval and the retries before the command itself, 
+the first one ther for the basic command, notice i don't have to put the CMD flag if i am just giving it the command to run.
+but if i want to show options if i want to give it custom options out of the box with the timeout and so on, then i have to specify which one is the command.
+now these aren't two different lines.
+Notice the back slash on the end of the first line there, so don't get that confused 
+
+
+
+
+--------------------------------------------------------------
+static website running in nginx just test default url
+
+from nginx:1.13
+
+HEALTHCHECK --interval=30s --timeout=3s \
+CMD curl -f http://localhost/ || exit 1
+---------------------------------------------------------------
+
+and here we have a simple example of what it might be like if you had a static application running inside an nginx server, you could set the interval
+and the time out from your Dockerfile and you would just have it simply do a cURL command on the localhost and if it return a 200 or 300
+it considers that fine, if it returns a 4 or 4 ir something else, it considers that an error, 
+and you notice here that i have an exit 1 which is the same thing as a false. 
+i did that just to show you that ceratin examples on the internet will have a false.
+ceratin examples will have an exit 1 they both do the same thing.
+
+
+-----------------------------------------------------------------------------
+healtcheck in php nginx dockerfile
+php-fpm running behind nginx, test the nginx and fpm status URLs
+
+From you nginx php fpm combo image
+
+#don't do this if phph-fpm is another container
+#must enable php-fpm ping/status in pool.ini
+#must forward /ping and /status urls from nginx to php-fpm 
+
+HEALTHCHECK --interval=5s --timeout=3s \
+CMD curl -f http://localhost/ping  || exit 1
+-----------------------------------------------------------------------------
+
+
+
+here is a  little bit more advanced example, in this case we are using a php app that's combined with nginx 
+and what i've done is in the resources you'll find a link to this php example, i've added in a custom  nginx config file that uses nginx and php-fpm status URLs 
+so bith of these applications have their own status page and sort of a healtcheck ping url and you can use those in your apps if you are using php or nginx.
+there are two different URLs but you can use both of them inside the same healtcheck.
+in this case we are just using one of them and we are throwing in the localhost/ping which is actually a php-fpm status command, but you have to enable that inside your php-fpm.
+Again in the resources of this lecture there is a link to a php docker good defaults (https://github.com/BretFisher/php-docker-good-defaults),
+you can go check that out on a github where i've shown in this example in a little bit more detail.
+
+
+-----------------------------------------------------------------------------
+healthcheck in postgres dockerfile
+
+use a postgreSQL utility to test for ready state
+
+
+FROM postgres
+
+#specify real user with -U to prevent errors in log
+
+HEALTCHECK --interval=5s --timeout=3s \
+CMD pg_isready -U postgres || exit 1
+-----------------------------------------------------------------------------
+
+
+next we have a postgres example so in the dockerfile i can use a different URL.
+so here we have a postgres application where in the healthcheck command i am using a command of " pg_isready ".
+
+Now with different apps, there is different tools. with postgres, it comes with a built-in tool, that's a very simple testing of a connection to a postgres server 
+so it doesn't validate that you have good data or that your database is mounted properly.
+it's simply goin to say....does this database server allow connections? yes or no 
+so thats a neat one that you can do out of the box   
+
+-----------------------------------------------------------------------------
+
+healtcheck in compose/stack files
+
+version: "2.1" (minimum for healthchecks)
+services:
+  web:
+   image:nginx
+   healtcheck:
+     test:["CMD", "curl", "-f", "http://localhost"]
+     interval:1m30s
+     timeout:10s
+     retries:3
+     start_period:1m #version 3.4 minimum 
+-----------------------------------------------------------------------------
+
+
+and here is what it would look like in a compose or stack file  very similar you will notice that at the start period dow there requires a different version 
+so since the healtcheck command came out in 1.12 it was actually supported in 2.1. of this compose file.
+but if you are going to use the start period that means you have to update your compose file to version 3.4 in order t support that.
+because the start period came out over a year later after the healthcheck command did.....
+
+so lets start with some simple run commands.....
+so what we are going to do here is we are going to start postgres database server without the healtcheck because by default it doesn't come with one 
+
+and then we are going to run it again with a manual healtcheck command that will add at the command line and we will see the difference 
+
+so firts without healtcheck
+sudo docker container run --name p1 -d postgres........so here we are going to call the first one p1 and we will run it in detach mode from the official postgres image   
+                                                        and if we do docker container ls we will see that there is nothing indicating a healtcheck here 
+
+in fact when i do docker containe ls i am not able to see a thing.....
+
+when we do the same command here with the "health" command here and this time we are going to use4 the " pg_isready " 
+which we talked about earlier to test  that the connections are available on this postgres server, we are going to tell it that the 
+ user we need is the postgres user, we don't actually need to give it a password, its not going to try to log in and its going to try to validate,
+ we will use the postgres image 
+
+
+sudo docker container run --name p8 -d --health-cmd = "pg_isready -U postgres || exit 1" postgres
+
+
+and now if we made a container ls we see that the health is starting,
+so now we get this additional feature in our status of our ls command...it will stay in the starting state for the default 30 seconds until it runs the healthcheck command for the first time.
+and now that we've waited over 30 seconds you will see that it's changed to status of healthy 
+
+now if we do " docker container inspect p2 " we will see at the very top of that we have this healthy and it shows at the output that is accepting connections 
+status even though that  mine is unhealthy
+
+
+
+now we are going to do some service commands to that same database in that same test healtcheck, what we will see here when we do this is that there are three different states that a service goes through
+on starting up its preparing which is usually means its downloading the image its starting which means its executing the container and bringing it up.
+then it's running and without the healtcheck command the starting and running are very quick, they are almost instantaneous and we will see that here 
+with the command 
+docker service create --name p1 postgres 
+
+and once its done preparing by downloading the image you will see that it goes immediately from starting to running because there is no healtcheck. 
+it doesn't have anything else to do other that start the container and say yeah the binary is running......
+
+but if we do that same command docker service create and call it p2 like before and give it that same command and we start the se4rvice with that health command  built in.....
+
+docker service create --name p2 --health-cmd="pg_isready -U postgres || exit 1" postgres 
+
+
+
+
+what we will see is that it will go from preparing to starting and it will sit at the starting state for the default 30 seconds until the first healtcheck runs  
+and this now the docker service expecting a healthy state before it considers this service fully running.
+after the 30 seconds is over it will shift to the running state, 
+then we get the latest little verify there, just to make sure that it's considereed stable and then we are done  
+so you can already see out of the box that the services as well as service updates we are going to get this extra bonus of health concept if we use these commands whenever we can 
+
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE             PORTS
+78zlg7z71ymp   p1        replicated   1/1        nginx:latest      
+g7pignaf3g3g   p2        replicated   0/1        postgres:latest   
+ndtsx8abfdo9   p3        replicated   0/1        nginx:latest      
+ueg83nku2n64   p4        replicated   0/1        nginx:latest      
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ps p4
+ID             NAME       IMAGE          NODE              DESIRED STATE   CURRENT STATE             ERROR     PORTS
+wtxsu78jprhh   p4.1       nginx:latest   mike-VirtualBox   Running         Starting 32 seconds ago             
+fbis8eemo8h6    \_ p4.1   nginx:latest   mike-VirtualBox   Shutdown        Complete 37 seconds ago             
+
+
+
+
+
+nice all the errors came out from that i use postgres and not nginx so now we are ready to and of course we need to create the service before we create the container 
+so 
+
+sudo docker service create --name p1 nginx  or    sudo docker service create --name p2 --health-cmd="pg_isready -U nginx || exit 1" nginx
+
+and then 
+
+sudo docker container run --name p1 -d nginx or   sudo docker container run --name p8 -d --health-cmd = "pg_isready -U nginx || exit 1" nginx
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service create --name p1 nginx
+hd9xexklfh5eoqc68w28qjkry
+overall progress: 1 out of 1 tasks 
+1/1: running   [==================================================>] 
+verify: Service converged 
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+Unable to find image 'nginx:latest' locally
+latest: Pulling from library/nginx
+Digest: sha256:2bcabc23b45489fb0885d69a06ba1d648aeda973fae7bb981bafbb884165e514
+Status: Downloaded newer image for nginx:latest
+docker: Error response from daemon: Conflict. The container name "/p1" is already in use by container "fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7". You have to remove (or rename) that container to be able to reuse that name.
+See 'docker run --help'.
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+
+
+and of course the containers that are based to nothing become dangling containers and its impossible to deleted with the original way and thus deleted at the time they showed up 
+
+so 
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container rm -f fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7
+fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+193dd002dd5d6dc45e91dad39f3023cc52ece404158a19f5edfd7468937f824b
+mike@mike-VirtualBox:~/Desktop/somewhere$ 
+
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS     NAMES
+193dd002dd5d   nginx          "/docker-entrypoint.…"   22 seconds ago   Up 21 seconds   80/tcp    p1
+9cb994d38956   nginx:latest   "/docker-entrypoint.…"   4 minutes ago    Up 4 minutes    80/tcp    p1.1.hse2rh8j6ex8mzs34juvs98m1
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE          PORTS
+hd9xexklfh5e   p1        replicated   1/1        nginx:latest   
+mike@mike-VirtualBox:~/Desktop/somewhere$ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
