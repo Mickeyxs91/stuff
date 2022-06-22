@@ -1,0 +1,20 @@
+version: "3.1"
+
+services:
+
+   drupal:
+     image: drupal
+     build: .
+     ports:
+       - "80:80"
+   
+    postgres:
+      environment:
+          POSTGRES_PASSWORD_FILE:  /home/mike/Desktop/newguy/texty
+      secrets:
+         -texty
+      volumes:
+        - ./sample-data:/var/lib/postgesql/data
+secrets:
+   texty:
+      file: texty.txt
