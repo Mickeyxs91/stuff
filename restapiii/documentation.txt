@@ -1,0 +1,7 @@
+'use strict'
+
+const btn  = document.querySelector('.btn-user');
+const usercontainer  = document.querySelector('.users');
+
+const request = new XMLHttpRequest();
+
