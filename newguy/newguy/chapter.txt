@@ -1,0 +1,3073 @@
+
+
+
+                                                                       section 4
+                                              swarm basic features and how to use them in your workflow
+18-----------------------------------------------------swarm stacks and production grade compose----------------------------------------
+.......
+C:\Users\michael.kourbelis>
+docker swarm leave --force
+Node left the swarm.
+
+C:\Users\michael.kourbelis>
+docker swarm init
+Error response from daemon: could not choose an IP address to advertise since this system has multiple addresses on 
+different interfaces (10.0.2.15 on eth0 and 192.168.99.117 on eth1) - specify one with --advertise-addr
+
+C:\Users\michael.kourbelis>
+docker swarm init 192.168.99.117
+"docker swarm init" accepts no arguments.
+See 'docker swarm init --help'.
+
+Usage:  docker swarm init [OPTIONS]
+
+Initialize a swarm
+
+C:\Users\michael.kourbelis>
+docker swarm init --advertise-addr 192.168.99.117
+Swarm initialized: current node (4rw3mfwgbdoguafl63e39sfqf) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+docker swarm join --token SWMTKN-1-1sq0tfe1bg2m54lx4bsi6gm5yg49nwtrkzswlnke7j9cvsubpb-f05akie2fbbgz4mm5dc4qmx7u 192.168.99.117:2377
+
+
+C:\Users\michael.kourbelis>
+docker-machine create nodei
+
+C:\Users\michael.kourbelis>
+docker-machine create nodeii
+
+C:\Users\michael.kourbelis>
+docker-machine create nodeiii
+
+C:\Users\michael.kourbelis> docker node ls
+ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS      ENGINE VERSION
+4rw3mfwgbdoguafl63e39sfqf *   default             Ready               Active              Leader              19.03.12
+
+
+now lets look at the stacks and how they work....
+i am back in my 3 node swarm that i built earlier and basically i am going to work on the default node as it is the basic one 
+and from there i can add the other nodes at the swarm and make them not leaders as leader is one but i can make them managers (reachables).
+
+
+
+C:\Users\michael.kourbelis>docker-machine ssh nodei
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@nodei:~$ docker node update  --role manager nodei
+
+Error response from daemon: This node is not a swarm manager. Use "docker swarm init" or "docker swarm join" to connect this node to swarm and try again.
+
+docker@nodei:~$ docker swarm join --token SWMTKN-1-1sq0tfe1bg2m54lx4bsi6gm5yg49nwtrkzswlnke7j9cvsubpb-f05akie2fbbgz4mm5dc4qmx7u 192.168.99.117:2377
+This node joined a swarm as a worker.
+docker@nodei:~$ exit
+logout
+
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@nodeii:~$ docker swarm join --token SWMTKN-1-1sq0tfe1bg2m54lx4bsi6gm5yg49nwtrkzswlnke7j9cvsubpb-f05akie2fbbgz4mm5dc4qmx7u 192.168.99.117:2377
+This node joined a swarm as a worker.
+docker@nodeii:~$ exit
+logout
+
+C:\Users\michael.kourbelis>docker-machine ssh nodeiii
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@nodeiii:~$ docker swarm join --token SWMTKN-1-1sq0tfe1bg2m54lx4bsi6gm5yg49nwtrkzswlnke7j9cvsubpb-f05akie2fbbgz4mm5dc4qmx7u 192.168.99.117:2377
+This node joined a swarm as a worker.
+docker@nodeiii:~$ docker node update  --role manager nodeiii
+Error response from daemon: This node is not a swarm manager. Worker nodes can't be used to view or modify cluster state. Please run this command on a manager node or promote the current node to a manager.
+docker@nodeiii:~$ exit
+logout
+exit status 1
+
+C:\Users\michael.kourbelis>docker node update  --role manager nodei
+nodei
+
+C:\Users\michael.kourbelis>docker node update  --role manager nodeii
+nodeii
+
+C:\Users\michael.kourbelis>docker node update  --role manager nodeiii
+nodeiii
+
+
+C:\Users\michael.kourbelis> docker node ls
+ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS      ENGINE VERSION
+4rw3mfwgbdoguafl63e39sfqf *   default             Ready               Active              Leader              19.03.12
+gnan5i9dr3siwf2trwjthlvbt     nodei               Ready               Active              Reachable           19.03.12
+0w3bkljkf1seomurqvoyrrbjp     nodeii              Ready               Active              Reachable           19.03.12
+dq7i2cuzid0l8mn25a5la36us     nodeiii             Ready               Active              Reachable           19.03.12
+
+and now i can enter nodei and do some stuff, here we are going to use the voting app example and if you remember our design for that 
+it was five different services and the all had dependencies on each other and it ultimately gave us two different websites,
+you went through and i am sure you crafted the best services list with all the values and options that it needed and it was perfect right?
+well i am here to tell you that now is no longer needed....it was really important for us to use them  and not everything is going to need a stack file.
+but now i have a stack file, lets just take a peek at it rela quick because you will notice that it looks very much like a compose file because it is.
+the only real key here thing you have to change as it has to be at least version 3 or higher.
+the latest version right now is version 3.1 but i am sure that it will change as it continues to change and mature, but you need version 3 in order to use stacks,
+you will notice that we have our redis and our db and our vote and all these things that are probably very similar to you from your own work,you are probably 
+very familiar with those and the images they need and the ports tey need open and all that.....but in this case you will notice deploy.
+deploy here is a new option you will see here that it was specifying how many replicas i want, which is how many copies of that image that need to run at a time, and 
+what happens when i do an update, so when i do an actual stack update which will then do service updates....
+how do i want that to roll out ? 
+do i want to go down at the same time ?
+do i only want one at a time ?
+how much delay between them ?.....there's all sorts of options here
+
+we are just scratching the surface, but you can see like i have a restart policy here that if the containers fails it will automatically restart it :
+
+   restart_policy:
+         condition: on-failure
+
+
+you can see  down here under the database i've actually had constraints put in to make sure that it's on a specific node and we haven't talked really a lot about 
+constraints yet but there are ways for us to label objects that is containers or images or really anything that we can create or destroy in swarm or in 
+Docker itself.
+
+we can actually assign labels to any of those, including nodes and a node that is a manager gets its own labels and this is very easy for us to to do to just say
+hey this container has has to run on a node that has this particular role.......
+As we scroll down we ve got some parallelism options which we have seen before....the delay option is pretty cool if you have some sort of 
+warm up time when you have sort of warm up time when you have containers that spin up, maybe they started ut the don't actually go live for maybe 60 seconds 
+or something, you can add delays there and we will actually look at those later during production blue green deployments but for now you can see those are 
+all pretty standard we've actually got even more options down here, you can actually see that i assign this a specific label (labels: [APP=VOTING])...
+i have a window and a max attempt for a restart policy so if it tries to restart and it continues to fail its not going to try more than three times.....
+
+       restart_policy:
+         condition: on-failure
+         delay: 10s
+         max_attempts: 3
+         window: 120s
+
+lets check it out, all i have to do  is do a docker stack deploy -c (-c flag stands for compose), so i am going to use a compose file and call it 
+vote app through "voteapp"........." docker stack deploy -c compose.yml voteapp "...........
+and there we go.....
+
+C:\Users\michael.kourbelis\Desktop\composee>docker stack deploy -c compose.yml voteapp
+Creating network voteapp_default
+Creating network voteapp_frontend
+Creating network voteapp_backend
+Creating service voteapp_redis
+Creating service voteapp_db
+Creating service voteapp_vote
+Creating service voteapp_result
+Creating service voteapp_worker
+Creating service voteapp_visualizer
+
+it didn't create actually create everything and spin it up thta fast....all it did was create those objects in the scheduler, which will then 
+go through the process of creating the services which then creating the tasks which then creating the containers, it also has to create the networks as 
+you will see here and remember that here we have the frontend and the backend   so it created those as well as a default network which 
+that particular stack file that i had was using a default network and then you see this option for visualizer which is a new one we did not use before 
+and we will see that in a minute.
+so lets take a look at the docker stack command a llitle more......
+
+
+
+C:\Users\michael.kourbelis\Desktop\composee>docker stack
+
+Usage:  docker stack [OPTIONS] COMMAND
+
+Manage Docker stacks
+
+Options:
+      --orchestrator string   Orchestrator to use (swarm|kubernetes|all)
+
+Commands:
+  deploy      Deploy a new stack or update an existing stack
+  ls          List stacks
+  ps          List the tasks in the stack
+  rm          Remove one or more stacks
+  services    List the services in the stack
+
+Run 'docker stack COMMAND --help' for more information on a command.
+
+C:\Users\michael.kourbelis\Desktop\composee>
+
+
+
+you will see that we can deploy we have done that already and then you can see that we have ls, ps, rm and services, so this command doesn't have a 
+whole lot of features to it, its preety simple because all of the functionality is really in the compose file and really in the objects its creating 
+and since we have done that already we can do things like "docker stack ls" which shows just shows us all of our stacks and then if i do 
+docker stack ps voteapp you see the actual tasks and then you can see which node they are running on......
+
+
+C:\Users\michael.kourbelis\Desktop\composee>docker stack ps voteapp
+ID                  NAME                   IMAGE                                          NODE                DESIRED STATE       CURRENT STATE            ERROR                       PORTS
+5gotupbkljjb        voteapp_db.1           postgres:9.4                                   default             Ready               Ready 2 seconds ago
+5m4h9xo62n9e         \_ voteapp_db.1       postgres:9.4                                   nodeiii             Shutdown            Failed 3 seconds ago     "task: non-zero exit (1)"
+mgj7byizthmg         \_ voteapp_db.1       postgres:9.4                                   nodeii              Shutdown            Failed 9 seconds ago     "task: non-zero exit (1)"
+w7mt2wlgsbn9         \_ voteapp_db.1       postgres:9.4                                   nodeii              Shutdown            Failed 15 seconds ago    "task: non-zero exit (1)"
+u9k8engjgm1b         \_ voteapp_db.1       postgres:9.4                                   nodeii              Shutdown            Failed 20 seconds ago    "task: non-zero exit (1)"
+i5pn01yz5v41        voteapp_result.1       dockersamples/examplevotingapp_result:before   nodeii              Running             Running 12 minutes ago
+lvbmpf7e7w6k        voteapp_worker.1       dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed 28 minutes ago    "task: non-zero exit (1)"
+latayiwyp53y         \_ voteapp_worker.1   dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed 29 minutes ago    "task: non-zero exit (1)"
+uqslibms6yuq         \_ voteapp_worker.1   dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed 29 minutes ago    "task: non-zero exit (1)"
+316d1wjhniga        voteapp_visualizer.1   dockersamples/visualizer:latest                nodeiii             Running             Running 31 minutes ago
+scdn99cy93hm        voteapp_worker.1       dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed 30 minutes ago    "task: non-zero exit (1)"
+kdf32a1qakqd        voteapp_result.1       dockersamples/examplevotingapp_result:before   default             Shutdown            Failed 12 minutes ago    "task: non-zero exit (1)"
+tog4zfmhlpjg        voteapp_vote.1         dockersamples/examplevotingapp_vote:before     nodeiii             Running             Running 33 minutes ago
+6i8pqvxbg9dt        voteapp_redis.1        redis:alpine                                   nodei               Running             Running 33 minutes ago
+nzvufrjidce6        voteapp_vote.2         dockersamples/examplevotingapp_vote:before     nodei               Running             Running 33 minutes ago
+zfgdx5vgl74z        voteapp_redis.2        redis:alpine                                   default             Running             Running 33 minutes ago
+
+C:\Users\michael.kourbelis\Desktop\composee>
+
+
+
+its not actually the containers its actally te tasks that we are seeing here because if it was the actual container we would see a big long name 
+because if you remember the services we created earlier they had these really long names if we actually went and did it docker ps. right?....
+if i did a docker container ls or docker container ps we will see a really long name at the names attribute
+
+
+C:\Users\michael.kourbelis\Desktop\composee> docker container ls
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+764e92abd367        redis:alpine        "docker-entrypoint.s…"   46 minutes ago      Up 46 minutes       6379/tcp            voteapp_redis.2.zfgdx5vgl74zunorg4l58qms5
+
+
+and that because the all get a guid because every container have to be uniquely named and thats how they guarantee that they are always unique and never collide.
+And the last one is ....  "docker stack services voteapp" and this is the best because it shows me my replicas and its kind like doing a " docker service ls "
+
+
+C:\Users\michael.kourbelis\Desktop\composee> docker stack services voteapp
+ID                  NAME                 MODE                REPLICAS            IMAGE                                          PORTS
+2ffzqqj3edvq        voteapp_redis        replicated          2/2                 redis:alpine                                   *:30000->6379/tcp
+p1kovsw4so7z        voteapp_worker       replicated          0/1                 dockersamples/examplevotingapp_worker:latest
+sag7eovg3b9g        voteapp_result       replicated          1/1                 dockersamples/examplevotingapp_result:before   *:5003->80/tcp
+szem3sh6pbhz        voteapp_db           replicated          0/1                 postgres:9.4
+thpoqadkbw33        voteapp_vote         replicated          2/2                 dockersamples/examplevotingapp_vote:before     *:5000->80/tcp
+xec6633ojqn8        voteapp_visualizer   replicated          1/1                 dockersamples/visualizer:latest                *:8080->8080/tcp
+
+C:\Users\michael.kourbelis\Desktop\composee>
+
+
+it shows me how many replicas i have started so i know whether i ve got the proper number of containers already started, and then if i want to dive deeper then i could 
+do ...docker stack ps.....where there we can get the task names here and we see what nodes they are runnning on....
+
+C:\Users\michael.kourbelis\Desktop\composee>docker stack ps voteapp
+ID                  NAME                   IMAGE                                          NODE                DESIRED STATE       CURRENT STATE               ERROR                       PORTS
+r9loanac7agu        voteapp_db.1           postgres:9.4                                   nodeiii             Ready               Ready 1 second ago
+yel97xslg67f         \_ voteapp_db.1       postgres:9.4                                   nodeiii             Shutdown            Failed 1 second ago         "task: non-zero exit (1)"
+p48e6ifsxm8l         \_ voteapp_db.1       postgres:9.4                                   nodeii              Shutdown            Failed 7 seconds ago        "task: non-zero exit (1)"
+x89ire7azwus         \_ voteapp_db.1       postgres:9.4                                   default             Shutdown            Failed 13 seconds ago       "task: non-zero exit (1)"
+7itw873emonu         \_ voteapp_db.1       postgres:9.4                                   default             Shutdown            Failed 19 seconds ago       "task: non-zero exit (1)"
+5bgdexzrhmg5        voteapp_result.1       dockersamples/examplevotingapp_result:before   nodeii              Running             Running 3 minutes ago
+7ixxdjwcd892         \_ voteapp_result.1   dockersamples/examplevotingapp_result:before   default             Shutdown            Failed 3 minutes ago        "task: non-zero exit (1)"
+t808ut1aq4d3         \_ voteapp_result.1   dockersamples/examplevotingapp_result:before   nodeii              Shutdown            Failed 22 minutes ago       "task: non-zero exit (1)"
+i5pn01yz5v41         \_ voteapp_result.1   dockersamples/examplevotingapp_result:before   nodeii              Shutdown            Failed 41 minutes ago       "task: non-zero exit (1)"
+lvbmpf7e7w6k        voteapp_worker.1       dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed about an hour ago    "task: non-zero exit (1)"
+latayiwyp53y         \_ voteapp_worker.1   dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed about an hour ago    "task: non-zero exit (1)"
+uqslibms6yuq         \_ voteapp_worker.1   dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed about an hour ago    "task: non-zero exit (1)"
+316d1wjhniga        voteapp_visualizer.1   dockersamples/visualizer:latest                nodeiii             Running             Running about an hour ago
+scdn99cy93hm        voteapp_worker.1       dockersamples/examplevotingapp_worker:latest   nodeii              Shutdown            Failed about an hour ago    "task: non-zero exit (1)"
+kdf32a1qakqd        voteapp_result.1       dockersamples/examplevotingapp_result:before   default             Shutdown            Failed about an hour ago    "task: non-zero exit (1)"
+tog4zfmhlpjg        voteapp_vote.1         dockersamples/examplevotingapp_vote:before     nodeiii             Running             Running about an hour ago
+6i8pqvxbg9dt        voteapp_redis.1        redis:alpine                                   nodei               Running             Running about an hour ago
+nzvufrjidce6        voteapp_vote.2         dockersamples/examplevotingapp_vote:before     nodei               Running             Running about an hour ago
+zfgdx5vgl74z        voteapp_redis.2        redis:alpine                                   default             Running             Running about an hour ago
+
+C:\Users\michael.kourbelis\Desktop\composee>
+
+
+
+so these two commands can give you a complete picture of how this entire application is running and if i wanted to deep dive into networking i could do a docker
+network " docker network ls " just ike we normally do and you can see these three new overlay networks that were created for this app and notice that the app name is 
+always at the beggining as the stack alwasy precedes the name of the service so each stack will make sure that that its name is at the front
+
+C:\Users\michael.kourbelis\Desktop\composee>docker network ls
+NETWORK ID          NAME                DRIVER              SCOPE
+dae42f9c3ff6        bridge              bridge              local
+c9a6f01edc60        docker_gwbridge     bridge              local
+acf36657a3b9        host                host                local
+0457rj03mn6u        ingress             overlay             swarm
+35c6d0774ac4        new_default         bridge              local
+cc4f3c68d312        none                null                local
+0d4d7qts9rxv        voteapp_backend     overlay             swarm
+mmk46nqai7qf        voteapp_default     overlay             swarm
+rtasu3ntcy08        voteapp_frontend    overlay             swarm
+
+C:\Users\michael.kourbelis\Desktop\composee>
+ 
+....and then lets go and check it out.... leyts type at the browser the ip of the service with the port specified on the compose file and then you see the site 
+
+http://192.168.99.117:5003/
+
+
+
+and then on http://192.168.99.117:8080 we have the visualizer which is a preety neat tool for demonstration purposes thats actually made by docker by the way and these are all an open source 
+repo that you can see on the resources section of this section 
+and so we have different colors for each service so
+the voteapp is with blue color and the vote is a pink, 
+now if we go tou our compose file and make a little change that has to do with the replicas i.e. to change them from 3 to five, we could go and update the service, but that's knd of antipattern.
+if we go in and type manually commands into the service like docker service update that would mean that next time i reapply this YAML file, it's going to overwrite those changes.
+so if you ever done a cloud information or formation i dont know in aws or any other configuration management you know that once you are using a config file like this to manage your 
+infrastracture you really want to always use this file because its going to be the source of truth.
+so it probably  in production would be some sort of file that you keep in a git Repository that you have version control on and you control changes, and that way you can roll back changes and in this 
+case, i'm just going to change that file real quick and we are going to run the same command............docker stack  deploy.....and notice that we dont have an update because we are going to deploy to 
+the same stack and its going to recognize that its existing and that we are going to update it based on these changes, so in order to update it we have got to make sure we use the right name....
+so its " docker stack deploy voteapp " aned then you will notice that it says updating services but recognizes that it needs to change them.
+and then if we go over to our visualizer you can see that we have already got it i.e. we have five of these voting apps already running, if they took a while to run and launch we could actually 
+see their states change in hers as the came online  but its a web app so that it will starts real quickly.
+okay that stucks now lets add on these the secrets to our stacks. 
+
+
+18-----------------------------------------------------swarm stacks and production grade compose----------------------------------------
+
+19-------------------------------secrets storage for swarm : protecting your environment variables---------------------------------------
+
+  alright so a new feature in 1.13.1 was full support for secrets, 
+  if i had to create a tag line of what this is its basically the easiest secure solution for storing secrets in swarm...i say the easiest because it's built into swarm, 
+  it comes out of the box and there's nothing you need to do to use it as long as you ve initialized your swarm and you are on version 1.13 or newer 
+  you've got secrets.
+  i say its secure because it was designed from the ground up to be encrypted on disk to be encrypted in transit and to only be available to the places it needs to be, and that's really what we need.
+  so what is a secret ?
+  a secret in this case is classifying anything that you don't want on the front page of a newspaper. 
+  if it got on the front page and you had to go change it that's a secret, 
+  its a username or password 
+  its a tls certificate or the keys to that 
+  its an ssh key 
+  its a twitter api key 
+  its an amazon key and in general 
+  its anything that you need to allow connectivity between stuff is probably a secret 
+  and you should be protecting it.
+
+  until now we haven't had a lot of great options for swarm, 
+  now there is definitely lots of options out there like vault and other great tools for storing secrets but they weren't built in and the required a seperate 
+  infrastracture set-up just so that you could even start using them.
+  so we can store in here anything that's a string or a binary up to 5mb in size and the coolest part about this is that it doesn't actually require your app to be rewritten in order to use it.
+  you don't have to have your app talk to a web service somewhere else in order to get these.
+
+  so lets see how it works...........................
+
+  as of 1.13.0 the swarm raft database is encrypted on disk by default.
+  if you install docker and do a swarm init like we have done before that's an encrypted database and when it shuts down the service, its encrypted with the keys stored securely , 
+  its only stored on the disk of the manager nodes and they are the only ones that have the keys to unlock it or decrypt it.
+  this is already existing in swarm but basically the way that the keys get down to the containers is through the control plane or the encrypted tls network communications between the managers and
+  the workers and that connection was already secure, it already used tls and mutual PKI authentication so it was a great way to use that existing channel for bringing these secrets down to our containers.
+  the way we get them around is we actually first put them into the swarm database using docker secrets  commands and then we assign them to the services whether we use the service commands  themselves 
+  or a stack file to tell swarm who is allowed to use this secrets.
+  the key here is that just because there's a container on a host or on a node and you've assigned the key to that service doesn't mean other containers can get access to it,
+  since this is built in to the docker engine, the docker worker keeps that key secure in memory only and only gets down to the containers on that node that need them.
+  now how they are presented in the file system to the container is it looks like a file on the hard drive to your apps inside the container 
+  but its not actually that, they are ot actually running on disk, they are in memory only using  a ramfs  file system an you wull get to them underneath the " /run/secrets " directory where it will by default 
+  be the name you gave the secret as a file and then when you just access that file you will see the one secret that's in it. so if you think of this as like a key value store, the key is the name of the 
+  file and the value is whats in it.
+  we can also set up aliases so we can have multiple names for the same key and we will see how that comes into play later 
+
+  /run/secrets/<secret_name>
+  /run/secrets/<secret_alias>
+
+
+for local development if you are using a stack file that has secret assignments in it it will actually work in docker compose on your local machine.
+now again docker-compose the command line should never be used in production on a production server.
+in this case in particular it's actually faking security.....so whats happening is we really want the docker developer or the docker user on their machine to be able to use the  
+stack files as much as possible....so the containers that you run on your local machine will actually see the secrets just like they would in swarm  but we dont have swarm on our local machine unless 
+we initialize it there,  which most people aren't going to do. 
+and the way we store the secrets is in the swarm database, so this may be kind of obvious to you but secrets depends on swarm, its a swarm only thing...if you dont have swarm you can't use secrets.
+However docker-compose command has a workaround where it actually mounts the secrets in a clear text file into the local container, now that's not secure but it does allow us to use secrets locallly 
+on our machine.....it's just not something that you would want to use in production which is why we have the secure store for swarm.
+
+19-------------------------------secrets storage for swarm : protecting your environment variables---------------------------------------
+
+
+20------------------------------------------------------------------using secrets in swarm services---------------------------------------
+
+    allright so now that we have gone through secrets and the features and how it works and all that lets actually look at some practicals, 
+    so what i have here is a 3 node swarm set up like before and i am in a secrets sample 1 directory  that you see in the repo and all ive got in there is one text file 
+    and that text file is just a simple username not even actually a password.
+    there is two ways we can actually create a secret inside of swarm ......and one of them is to give it a file and another one is to pass a value at the command line.
+    so lets use the file first that we have in our desktop 
+    if we were in linux we create the three docker machines we made them managers from the node1 then we go to the node1 and work from there and for the others
+    now we are in windows we can make the docker machines we make them managers and load the files from git hub as each doecker machine is a linux operating system but we prefer to work 
+    simply from our desktop.....so we just simple create the file  with the text and use it from its location via the docker command below that names it during creation that say.....
+    but first we make the swarm init and then we proceed to the the command....
+    docker secret xfile texty.txt 
+    which spits back the id like it does for other objects and lets create another one, lets actually 
+    that puts the password of them, where this time we will echo it from the command line e.g. 
+    echo "123456789" | docker secret create one - 
+
+
+       C:\Users\michael.kourbelis\Desktop\composeea>docker swarm init --advertise-addr 192.168.99.126
+         Swarm initialized: current node (lygyx4jabzuwm5ro9fvjzgaoa) is now a manager.
+
+         To add a worker to this swarm, run the following command:
+
+            docker swarm join --token SWMTKN-1-351ls320nc2o9jgzd2egy31lzdtigu5a97h25swppchci4ajad-0k35rx3yk7sh62ums4rsg595a 192.168.99.126:2377
+
+         To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+
+            C:\Users\michael.kourbelis\Desktop\composeea>docker secret create xfile texty.txt
+            rjjno7ait8n4hrnvbpezhacd4
+
+            C:\Users\michael.kourbelis\Desktop\composeea>echo "123456789" | docker secret create one -
+            qex6290nxm2g1lt685xo9evzy
+   
+   if you see what i am doing i am actually typing out a password in their command line with echo and echoing it in into the creation command  
+   and notice the dash on the end because that's telling the command to read from the standard input, which is what we giving it with the echo command,
+   now i should say that both of these have drawbacks,
+   the first one you're actually storing the password on the hard drive of the server on the host  and we really wouldn't want to do that 
+   so maybe you would be using the remote API from that local command line on your machine and then pass in the files that way
+   and in the second one its actually going into the history of our bash file for our root user so then technically if someone were able to get into root they could actually get this password out.
+   when you are dealing with your own production systems you will need to look at various ways to get arounf these two potential security concerns.
+
+
+   so what we have here is now if i do a docker secret ls you can see that i have both of them in there
+
+
+      C:\Users\michael.kourbelis\Desktop\composeea>docker secret ls
+      ID                          NAME      DRIVER    CREATED             UPDATED
+      qex6290nxm2g1lt685xo9evzy   one                 39 minutes ago      39 minutes ago
+      rjjno7ait8n4hrnvbpezhacd4   xfile               About an hour ago   About an hour ago
+
+
+   now i can actually inspect them but i am not going to ever see the password or the actual secret as its not going to   give us the information right,because if it was this easy to get the information it 
+   wouldn't be a secret right? 
+
+
+    C:\Users\michael.kourbelis\Desktop\composeea>docker secret inspect one
+[
+    {
+        "ID": "qex6290nxm2g1lt685xo9evzy",
+        "Version": {
+            "Index": 12
+        },
+        "CreatedAt": "2022-06-08T11:21:44.046219508Z",
+        "UpdatedAt": "2022-06-08T11:21:44.046219508Z",
+        "Spec": {
+            "Name": "one",
+            "Labels": {}
+        }
+    }
+]
+
+C:\Users\michael.kourbelis\Desktop\composeea>docker secret inspect xfile
+[
+    {
+        "ID": "rjjno7ait8n4hrnvbpezhacd4",
+        "Version": {
+            "Index": 11
+        },
+        "CreatedAt": "2022-06-08T10:52:05.318012395Z",
+        "UpdatedAt": "2022-06-08T10:52:05.318012395Z",
+        "Spec": {
+            "Name": "xfile",
+            "Labels": {}
+        }
+    }
+]
+
+C:\Users\michael.kourbelis\Desktop\composeea>
+
+
+so the goal here is that once you put the secret in the system uts stored in the database and the only   thing that's going to have access to the decrypted secrets are going to
+e the containers and services we assign to....so lets do that now, i am going to create a service manually
+
+
+docker service create --name my_webb --secret one --secret xfile 
+-e POSTGRES_PASSWORD_FILE=C:/Users/michael.kourbelis/Desktop/secrets/texty 
+-e POSTGRES_USER_FILE=C:/Users/michael.kourbelis/Desktop/secrets/textyy nginx
+
+i call the service "my_web" and we are going to map the secret to it....basically we are telling this create command take this secret called  
+one or xfile (i can also use the id of the secret and assign it to this service)
+so that all containers in this service will see the secret one for the user and one for the password 
+ok this maps the secrets to the service so that they show up as files inside the container   but it does not tell nginx that we are creating from this image or how to use those secrets.
+so usually we need to do something with the configuration of the image and in this case the official images from docker hub have settled on a standard where you use environment variables, 
+but instead of passing in maybe something like postgres_passwords that would be hard to use with a file  
+we have to actually like cat out the file into the environment variable (-e POSTGRES_PASSWORD_FILE=C:/Users/michael.kourbelis/Desktop/secrets/texty) 
+
+and that's a little bit of a pain so they have the standard where if you specify a file and this would be the 
+path (C:/Users/michael.kourbelis/Desktop/secrets/texty) so if i do that, that's actually in the startup of the image that will look for this environmet variable being filled out
+and if it is it will them pull that file (texty.txt) in and store it in the environment variable.....i.e the actual contents of that file.
+this is a really easy way to consume these secrets that are in the files, but it does mean  that the images you use need to to have this standard in place and the same goes for the user 
+(-e POSTGRES_USER_FILE)
+
+
+hopefully this makes sense to you, when i create the service its going to do the typical thing it does when it issues a scheduling request for a new container, its going to create
+one postgres database   and its going to pass it  the environment variables for the locations of those two secrets and then its going to map in a tempfs, its actually going to map in what look like files 
+but again it is really a RAM file system or a tmpfs.....so lets see what we can see in there 
+
+
+C:\Users\michael.kourbelis\Desktop\composeea> 
+docker service create --name my_webb --secret one --secret xfile -e POSTGRES_PASSWORD_FILE=C:/Users/michael.kourbelis/Desktop/secrets/texty -e POSTGRES_USER_FILE=C:/Users/michael.kourbelis/Desktop/secrets/textyy nginx
+zn3mqzvanqb1uziv0fjzfalyn
+overall progress: 1 out of 1 tasks
+1/1: running   [==================================================>]
+verify: Service converged
+
+
+
+in order to use the above command you must create the secrets first
+
+
+            C:\Users\michael.kourbelis\Desktop\composeea>docker secret create xfile texty.txt
+            rjjno7ait8n4hrnvbpezhacd4
+
+            C:\Users\michael.kourbelis\Desktop\composeea>echo "123456789" | docker secret create one -
+            qex6290nxm2g1lt685xo9evzy
+-----------------------------------------------------------------important------------------------------------------------------------------------------
+
+so now that we have the my_webb service lets go to see what we have to see through the command ....docker service ps my_webb.... so as to see in what node is running on 
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker service ps my_webb
+ID             NAME        IMAGE          NODE      DESIRED STATE   CURRENT STATE            ERROR     PORTS
+r6zk3e5unj6e   my_webb.1   nginx:latest   default   Running         Running 23 minutes ago
+
+
+now lets do an exec in that node to see what exists inside this container for that service  the name of which comes out from the command below 
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup> docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS     NAMES
+a5c36de34436   nginx:latest   "/docker-entrypoint.…"   28 minutes ago   Up 28 minutes   80/tcp    my_webb.1.r6zk3e5unj6evrs85x75k0qhx
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>  docker exec -it  my_webb.1.r6zk3e5unj6evrs85x75k0qhx bash 
+
+
+
+
+and now we are able to do an ls on secrets but again reember that you are on a different os now and your secrets will not be there and 
+ must be imported with a volume on that container, so back on your windows machine and to your work 
+ we can actually see the logs of this  ....my_webb.1... via the 
+
+ docker logs my_webb.1.r6zk3e5unj6evrs85x75k0qhx
+
+
+
+ C:\Users\michael.kourbelis\Desktop\composeea\sumup> docker logs my_webb.1.r6zk3e5unj6evrs85x75k0qhx
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2022/06/09 11:29:07 [notice] 1#1: using the "epoll" event method
+2022/06/09 11:29:07 [notice] 1#1: nginx/1.21.6
+2022/06/09 11:29:07 [notice] 1#1: built by gcc 10.2.1 20210110 (Debian 10.2.1-6)
+2022/06/09 11:29:07 [notice] 1#1: OS: Linux 4.19.130-boot2docker
+2022/06/09 11:29:07 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2022/06/09 11:29:07 [notice] 1#1: start worker processes
+2022/06/09 11:29:07 [notice] 1#1: start worker process 31
+
+
+
+
+and now we know that it actually works because if it didn't it definately it didn't have those files and the actual database would keep recraeting itself and not be able to work 
+because it didn't have a password and a user name to create the database 
+so if you do a docker service ps again what you would see if it wasn't working correctly in a database scenario is the database would actually be failing, 
+and it would keep restaring it and you would see new containers being created here.
+
+
+docker service ps my_webb
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker service ps my_webb
+ID             NAME        IMAGE          NODE      DESIRED STATE   CURRENT STATE               ERROR     PORTS
+r6zk3e5unj6e   my_webb.1   nginx:latest   default   Running         Running about an hour ago
+
+
+
+so now that we've actually assigned it to there we can actually use docker service update to remove the secret.......docker service update --secret-rm
+there is also secret-add but if i removed one of these secrets what would actualy happen is it will redeploy the container because secrets are a part of the immutable design of services 
+if anything in the container has to change for the service the service will not go in and change something inside the container.
+it will actually stop the container and redeploy a new one 
+
+obviously that's not ideal for databases, so we are going to have to come up with dfferent plan for how we would update database passwords and that's somethiong we can talk about later 
+
+for now you must knopw that you can remove such containers and add adittional ones to an existing service it's just going to recreate the container when you do it. 
+
+20------------------------------------------------------------------using secrets in swarm services---------------------------------------
+
+21------------------------------------------------------------------using secrets with swarm stacks---------------------------------------
+
+   now that we have seen secrets with services lets look at secrets with stacks, in this directory
+   i am in secrets sample two and in this directory i have a compose file and then two secrets stored in text files in the directory sumup
+   so its the similar password and user names that we had in the previous lecture but now we have defined all this in a compose file.
+   we have several things different here i.e. in compose.yml the version must be 3.1 
+
+   in order to have secrtes  we have to be at the .1 release of the 3rd version, we need 3 in order to have stacks with secrets we need it to be 3.1 or higher.
+   the second thing we will notice is that down here at the bottom  we have this root secrets key now 
+
+   secrets:
+  texty:
+      file: ./texty.txt
+  textyy:
+       file: ./textyy.txt
+
+which is the point that we define our secrets, now the two ways that you can do secrets in a compose file are either using a file for each secret or have the secrets pre-created.
+and below the keyword secrets we are just using files but what we could do is cretae those secrets on our own in some other method either through the CLI like you've seen or maybe through the API directly.
+then we would just instead of the file underneath it, it would just say external  : and then it would be the name of the secret inside the secrets list 
+
+we need to tell the compose file about our secrets and where they are and then we actually assign them to the services that need them and that's key because what we are really saying here is that only 
+the container that wants our secret
+will gets our secret
+and if this was a complicated compose file where we had multiple services we may have different secrets for different services 
+then 
+we would first define all of them at the bottom and then we would assign them specifically at each service.
+now i would say that this is actually considered the short form or the easy way to do the secrets under a service......there is actually a long form that allows you to define things like the permissions 
+and the users that are allowed to access that using standard linux mode and user ID syntaxes.
+
+so if you running applications as a non -root user and you want to target these secrets to only that user being able to access them, 
+but for simplicity's sake in this first example we are just using the short form......
+
+and all i need to do is to use that file in a standard stack deploy command, so docker stack deploy -c compose.yml mymaan  
+
+
+C:\Users\michael.kourbelis\Desktop\new>docker stack deploy -c compose.yml mymaan
+Creating network mymaan_default
+Creating secret mymaan_texty
+Creating secret mymaan_textyy
+Creating service mymaan_psql
+
+
+
+
+
+
+as you see it actually created the network first then the sedcrets and then the service, now if i go and did a docker secret look up (docker secret ls) then you will see that the 
+two are in there and it follows the same name convention as all other stack components, where it's always the stack name and then the name of the object.
+
+
+C:\Users\michael.kourbelis\Desktop\new>docker secret ls
+ID                          NAME            DRIVER    CREATED          UPDATED
+vcl8029t7562to6vaz3bd15h9   mymaan_texty              15 minutes ago   15 minutes ago
+hbbzig9tq5sni1uepgo1j53rf   mymaan_textyy             15 minutes ago   15 minutes ago
+npgbux3jawojy9s1s1k9dv1c3   one                       3 hours ago      3 hours ago
+z5rkksh417f7op1u24ea40q8p   xfile                     3 hours ago      3 hours ago
+
+
+
+just like in the previous lecture if i jumbed on the sql server and actually looked for those files they would be there just like they were before; only now they're managed inside our stack file.
+The nice thing here is if i removed my stack it also cleans up the secrets and gets rid of them.
+in the previous example if we wanted to remove our secrets, we would have had to do a docker secret rm (docker secret rm mymann) to actually remove each one.
+
+and a last reminder in these examples we have been using text files on this server and that we are talking about 3-node swarm here, but if you are in a production environment or really anything that's not on 
+your local machine you should not be keepin the secrets in files or in the bash history file or any place that could possibly be on that host.
+thats kind of defeating the p[urppose of having the secrets in the first place. 
+whatever your process is for getting secrets into the swarm.......just know that you may need cleanup once you're done there, so that you don't leave residual secrets around that are easy for people to get   
+
+
+21------------------------------------------------------------------using secrets with swarm stacks---------------------------------------
+                                              swarm basic features and how to use them in your workflow
+                                                                            section 4
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+                                                                           section 5
+                                                                      swarm app lifecycle
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+22--------------------------------------------------------using secrets with local Docker compose-----------------------------------------------------------------------
+
+what about secrets for local development using the docker compose command line, we've been talking about swarm up until now, but i am back on my machine and 
+i have docker compose install which i did not have in my swarm....because again  compose is not a production tool  its designed for development.
+
+I am in the same secret sample directory we had before, you can see that i have the two password files and the docker compose file that we had in the swarm.
+just to prove that i'm not in a swarm i can do a docker node ls and the message 
+"error response from daemon: this node is not a swarm manager. Use docker swarm init or docker swarm join" to connect this node to swarm and try again.
+
+clearly tells us that this is not a swarm manager i am not in a swarm so i don't have access to the swarm database or the ability to put secrets in it.
+
+so how we deal with this in local development ?
+well ideally we can still use the same compose file we can use the same objects like the environment variables for postgres and docker had to come up with a way to make this work in test and dev, 
+if we do.....docker-compose up -d 
+
+
+C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty
+
+docker service create --name my_webb --secret one --secret xfile -e POSTGRES_PASSWORD_FILE= C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty -e POSTGRES_USER_FILE= C:/Users/michael.kourbelis/Desktop/composeea/sumup/textyy nginx
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker-compose up -d
+time="2022-06-10T13:16:49+03:00" level=warning msg="Found orphan containers ([sumup-vote-1 sumup-vote-2 sumup-result-1 sumup-redis-2 sumup-redis-1 sumup-visualizer-1 sumup-worker-1 sumup-db-1]) for this project. 
+If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker-compose up --remove-orphans
+[+] Running 8/8
+ - Container sumup-db-1          Removed                                                                                                                                                                                                0.1s
+ - Container sumup-redis-2       Removed                                                                                                                                                                                                0.5s
+ - Container sumup-visualizer-1  Removed                                                                                                                                                                                                0.5s
+ - Container sumup-worker-1      Removed                                                                                                                                                                                                0.1s
+ - Container sumup-redis-1       Removed                                                                                                                                                                                                0.5s
+ - Container sumup-vote-2        Removed                                                                                                                                                                                                0.6s
+ - Container sumup-result-1      Removed                                                                                                                                                                                               13.5s
+ - Container sumup-vote-1        Removed                                                                                                                                                                                                0.1s
+ - Container sumup-psql-1        Creating                                                                                                                                                                                               0.0s
+Error response from daemon: invalid mount config for type "bind": invalid mount path: 'C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty.txt' mount path must be absolute
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker secret create xfile texty.txt
+1a3hfkxpz1gbie41kcqw00cv9
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>echo "123456789" | docker secret create one -
+oxganhogtznund9xsmxvbzt5q
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>docker-compose up -d
+[+] Running 0/0
+ - Container sumup-psql-1  Creating                                                                                                                                                                                                     0.0s
+Error response from daemon: invalid mount config for type "bind": invalid mount path: 'C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty.txt' mount path 
+must be absolute
+
+
+invalid mount path: 'C:/Users/michael.kourbelis/Desktop/composeea/texty.txt' mount path must be absolute
+
+C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty
+
+docker service create --name my_webb --secret one --secret xfile -e POSTGRES_PASSWORD_FILE= C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty -e POSTGRES_USER_FILE= C:/Users/michael.kourbelis/Desktop/composeea/sumup/textyy nginx
+
+Error response from daemon: rpc error: code = InvalidArgument desc = ContainerSpec: "C:/Users/michael.kourbelis/Desktop/composeea/sumup/texty" is not a valid repository/tag
+
+
+docker service create --name my_webb --secret one --secret xfile -e POSTGRES_PASSWORD_FILE=C:/Users/michael.kourbelis/Desktop/secrets/texty -e POSTGRES_USER_FILE=C:/Users/michael.kourbelis/Desktop/secrets/textyy nginx
+ez3lt44w4hf7i07xrydino2x5
+overall progress: 1 out of 1 tasks
+1/1: running   [==================================================>]
+verify: Service converged
+
+C:\Users\michael.kourbelis\Desktop\composeea>
+
+
+
+
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea>docker stack deploy -c compose.yml mydb
+Creating network mydb_default
+open C:\Users\michael.kourbelis\Desktop\composeea\textyy.txt: The system cannot find the file specified.
+
+C:\Users\michael.kourbelis\Desktop\composeea>docker stack deploy -c compose.yml mydb
+Creating secret mydb_texty
+Creating secret mydb_textyy
+Creating service mydb_psql
+
+C:\Users\michael.kourbelis\Desktop\composeea>docker secret ls
+ID                          NAME          DRIVER    CREATED          UPDATED
+tnoaw6lu7epwqhspe5csbgvry   mydb_texty              20 seconds ago   20 seconds ago
+qauyb16n4e4fj7iw0gxkw6sq9   mydb_textyy             20 seconds ago   20 seconds ago
+
+
+
+docker stack deploy -c docker-compose.yml mymaan
+------------------------------------------------------------------------------------------
+
+well i put it to linux and played really simple.........oooo and i renamed the compose.yml to docker-compose.yml
+
+
+-----------------------------------------------------------------------------------------------
+version: "3.1"
+services:
+   psql:
+     image: postgres
+     secrets:
+       - texty
+       - textyy
+     environment:
+       POSTGRES_PASSWORD_FILE:  /home/mike/Desktop/composeea/texty
+       POSTGRES_USER_FILE: /home/mike/Desktop/composeea/textyy
+secrets:
+  texty:
+      file: ./texty.txt
+  textyy:
+      file: ./textyy.txt
+-----------------------------------------------------------------------------------------------
+
+
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+sudo docker swarm init
+Swarm initialized: current node (a3vcsgq2ksgl2afhyoyezibhz) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-2yx42x5gzuhkrejy3hzqmzeeo2ncyzp28o0jkt2ag5d6zz8r3f-411lwgie9baaqkiwqaam1bj25 10.0.2.15:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+sudo docker stack deploy -c docker-compose.yml mymaan
+
+Creating network mymaan_default
+Creating secret mymaan_one
+Creating secret mymaan_xfile
+service psql: undefined secret "texty"
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+docker secret ls
+
+Got permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.24/secrets": dial unix /var/run/docker.sock: connect: permission denied
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+sudo docker secret ls
+
+ID                          NAME           DRIVER    CREATED          UPDATED
+5vf16k1imwvscwva0bou7pmgi   mymaan_one               46 seconds ago   46 seconds ago
+npao68kamj56naquio6rx6hxl   mymaan_xfile             46 seconds ago   46 seconds ago
+mike@mike-VirtualBox:~/Desktop/composeea$ docker-compose up -d
+ERROR: 
+        Can't find a suitable configuration file in this directory or any
+        parent. Are you in the right directory?
+
+        Supported filenames: docker-compose.yml, docker-compose.yaml
+
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose up -d
+ERROR: Service "psql" uses an undefined secret "texty" 
+
+
+here this is because i have name the 
+
+  secrets:
+       - texty
+       - textyy
+
+and then at the end i had 
+
+secrets:
+  xfile:
+      file: ./texty.txt
+  textyy:
+      one: ./textyy.txt
+
+so i change the xfile with texty and the one with textyy
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+sudo docker-compose up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Creating network "composeea_default" with the default driver
+Pulling psql (postgres:latest)...
+latest: Pulling from library/postgres
+42c077c10790: Pull complete
+3c2843bc3122: Pull complete
+12e1d6a2dd60: Pull complete
+9ae1101c4068: Pull complete
+fb05d2fd4701: Pull complete
+9785a964a677: Pull complete
+16fc798b0e72: Pull complete
+f1a0bfa2327a: Pull complete
+fd2d68720749: Pull complete
+83b23beac012: Pull complete
+7962517582d4: Pull complete
+6b4a569b8013: Pull complete
+ad029fbc8984: Pull complete
+Digest: sha256:2d1e636f07781d4799b3f2edbff78a0a5494f24c4512cb56a83ebfd0e04ec074
+Status: Downloaded newer image for postgres:latest
+Creating composeea_psql_1 ... 
+Creating composeea_psql_1 ... done
+mike@mike-VirtualBox:~/Desktop/composeea$ A
+
+
+
+now we are going to use the command....sudo docker-compose exec psql cat /home/mike/Desktop/composeea/texty....just to see this 
+
+ERROR: No container found for psql_1
+
+sudo docker service create --name psql --secret one --secret xfile -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/newguy/texty postgres
+
+secret not found: one
+
+
+
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup> docker secret create xfile texty.txt
+1a3hfkxpz1gbie41kcqw00cv9
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup> echo "123456789" | docker secret create one -
+oxganhogtznund9xsmxvbzt5q
+
+C:\Users\michael.kourbelis\Desktop\composeea\sumup>
+
+mike@mike-VirtualBox:~/Desktop/composeea$  docker secret create xfile texty.txt
+
+Got permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Post "http://%2Fvar%2Frun%2Fdocker.sock/v1.24/secrets/create": dial unix /var/run/docker.sock: connect: permission denied
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo  docker secret create xfile texty.txt
+\0kyqte933xh9x0acjb2e6kvor
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo  echo "123456789" | docker secret create one -
+Got permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Post "http://%2Fvar%2Frun%2Fdocker.sock/v1.24/secrets/create": dial unix /var/run/docker.sock: connect: permission denied
+
+mike@mike-VirtualBox:~/Desktop/composeea$ echo "123456789" | sudo  docker secret create one -
+p1wvpiptmuszhywuvblf9gib4
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+sudo docker stack deploy -c docker-compose.yml psql
+sudo docker secret create xfile texty.txt
+echo "123456789" | sudo docker secret create one -
+sudo docker run -d --name nginx  -p 8080:80   nginx:alpine
+sudo docker service create --name psql --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+sudo docker exec -ti pssql bash
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+sudo docker secret create texty texty.txt
+sudo docker secret create textyy textyy.txt
+
+sudo docker service create --name psql --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+
+sudo docker service ps psql
+
+
+ID             NAME      IMAGE          NODE              DESIRED STATE   CURRENT STATE            ERROR     PORTS
+deiqcmi6niq5   psql.1    nginx:alpine   mike-VirtualBox   Running         Running 54 seconds ago 
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS                                   NAMES
+564c3a5c6c12   nginx:alpine   "/docker-entrypoint.…"   2 minutes ago    Up 2 minutes    80/tcp                                  psql.1.deiqcmi6niq5qc8uixusq915n
+2aa194b91ae6   nginx:alpine   "/docker-entrypoint.…"   41 minutes ago   Up 41 minutes   0.0.0.0:8080->80/tcp, :::8080->80/tcp   pssql
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+
+sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n bash
+OCI runtime exec failed: exec failed: unable to start container process: exec: "bash": executable file not found in $PATH: unknown
+
+sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n sh
+
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n /bin/bash
+OCI runtime exec failed: exec failed: unable to start container process: exec: "/bin/bash": stat /bin/bash: no such file or directory: unknown
+
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n //bin// sh
+
+OCI runtime exec failed: exec failed: unable to start container process: exec: "//bin//": permission denied: unknown
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n sh
+/ # ls
+bin                   docker-entrypoint.sh  lib                   opt                   run                   sys                   var
+dev                   etc                   media                 proc                  sbin                  tmp
+docker-entrypoint.d   home                  mnt                   root                  srv                   usr
+/ # cd run
+/run # ls
+nginx.pid  secrets
+/run # cd secrets
+/run/secrets # ls
+texty   textyy
+/run/secrets # cat texty
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker logs psql.1.deiqcmi6niq5qc8uixusq915n
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2022/06/14 12:54:00 [notice] 1#1: using the "epoll" event method
+2022/06/14 12:54:00 [notice] 1#1: nginx/1.21.6
+2022/06/14 12:54:00 [notice] 1#1: built by gcc 10.3.1 20211027 (Alpine 10.3.1_git20211027) 
+2022/06/14 12:54:00 [notice] 1#1: OS: Linux 4.15.0-184-generic
+2022/06/14 12:54:00 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2022/06/14 12:54:00 [notice] 1#1: start worker processes
+2022/06/14 12:54:00 [notice] 1#1: start worker process 31
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker service ps psql
+ID             NAME      IMAGE          NODE              DESIRED STATE   CURRENT STATE            ERROR     PORTS
+deiqcmi6niq5   psql.1    nginx:alpine   mike-VirtualBox   Running         Running 20 minutes ago             
+mike@mike-VirtualBox:~/Desktop/composeea$
+
+
+
+
+alright now that we have seen secretes with services we are going to see secrets with stacks so in this directory " /home/mike/Desktop/composeea/ "
+we have a compose file and then two secrets stored in text files 
+and all of these are defined in a compose file......and in order to use that file in a standard stack deploy command.....
+
+sudo docker stack deploy -c docker-compose.yml mydb
+Creating network mydb_default
+Creating secret mydb_texty
+Creating secret mydb_textyy
+Creating service mydb_psql
+
+
+
+now if i do......sudo docker secret ls i will see the two secrets in there and the follow the same name convention 
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker secret ls
+ID                          NAME          DRIVER    CREATED          UPDATED
+yb2fgannnhqzp1bl4rn24p9w1   mydb_texty              45 seconds ago   45 seconds ago
+mgpp3gx3go8lcy813zppver6m   mydb_textyy             45 seconds ago   45 seconds ago
+x3zmljnr242dtiv8qqt380vsh   texty                   31 minutes ago   31 minutes ago
+blhxu0b8viw9gs12rv6labqjw   textyy                  31 minutes ago   31 minutes ago
+
+
+compose is not a production tool is designed for development 
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker node ls
+Error response from daemon: This node is not a swarm manager. Use "docker swarm init" or "docker swarm join" to connect this node to swarm and try again.
+
+this tells us that we are not in swarm manager i am not in a swarm so i dont have access to the swarm database or the ability to put secrets in it....so how we deal wit this in local development
+well ideally we can use the same compose file we can still use the same objects like the environment variables like we did in postgress.....and docke have to come up 
+with a way to make this work in test and dev and this is achieved by doing " docker-compose up -d "
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose up -d
+Creating network "composeea_default" with the default driver
+Creating composeea_psql_1 ... 
+Creating composeea_psql_1 ... done
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED             STATUS             PORTS                                   NAMES
+7a809677a5d4   nginx:alpine   "/docker-entrypoint.…"   5 seconds ago       Up 3 seconds       80/tcp                                  composeea_psql_1
+2aa194b91ae6   nginx:alpine   "/docker-entrypoint.…"   About an hour ago   Up About an hour   0.0.0.0:8080->80/tcp, :::8080->80/tcp   pssql
+mike@mike-VirtualBox:~/Desktop/composeea$ 
+
+and now we do " sudo docker-compose exec  composeea_psql_1 cat /home/mike/Desktop/composeea/texty"
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose exec  composeea_psql_1 cat /home/mike/Desktop/composeea/texty
+[sudo] password for mike: 
+ERROR: No such service: composeea_psql_1
+
+
+
+add the "   container_name: myappp " to the compose.yml and run again the command,  sudo docker-compose up -d
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS                                   NAMES
+5b3d1ccb51e3   nginx:alpine   "/docker-entrypoint.…"   15 seconds ago   Up 13 seconds   80/tcp                                  myappp
+2aa194b91ae6   nginx:alpine   "/docker-entrypoint.…"   2 hours ago      Up 2 hours      0.0.0.0:8080->80/tcp, :::8080->80/tcp   pssql
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose exec  myappp  cat /run/secrets/texty
+ERROR: No such service: myappp
+
+
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker service create --name myappp --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+Error response from daemon: This node is not a swarm manager. Use "docker swarm init" or "docker swarm join" to connect this node to swarm and try again.
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker swarm init
+Swarm initialized: current node (kngt6iqd0x24la714bajjfuuw) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-36fuasjdu8v1ok4a9calvw1o076qhhxkjlsqtitev51zry5djw-8ezoqzzxvo3aylchyawmqx651 10.0.2.15:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker service create --name myappp --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+secret not found: texty
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker secret ls
+ID        NAME      DRIVER    CREATED   UPDATED
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker secret create texty texty.txt
+w01nqq695sp64if1zgc27gbyr
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker secret create textyy textyy.txt
+djx3n3qh2xaqm60i9slhn2pv6
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker service create --name myappp --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+ce329ganf7rtwjr7b8z9ugpwi
+overall progress: 1 out of 1 tasks 
+1/1: running   [==================================================>] 
+verify: Service converged 
+
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose exec  myappp  cat /run/secrets/texty
+ERROR: No such service: myappp
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE          PORTS
+ce329ganf7rt   myappp    replicated   1/1        nginx:alpine   
+mike@mike-VirtualBox:~/Desktop/composeea$ sudo docker-compose exec  ce329ganf7rt  cat /run/secrets/texty
+ERROR: No such service: ce329ganf7rt
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+I think you got the relation of docker and docker-compose wrong:
+
+docker-compose is a wrapper around docker. To do its job docker-compose needs its config: docker-compose.yaml
+
+Spinning your example further:
+
+create docker-compose.yaml:
+
+version: '2'
+services:
+  web:
+    container_name: myapp
+    build: .
+    command: node app.js
+    ports:
+      - "9000:3000"
+
+use docker-compose to start the container and run a command in the running container:
+
+docker-compose up
+docker-compose exec composeea_psql_1 /bin/bash
+
+
+docker-compose uses the name of the service - in your case this is web - whereas docker uses the container name - in this case myapp.
+
+So to run /bin/bash through docker, you would use the following:
+
+docker exec -ti myapp /bin/bash
+
+
+you could remove the container_name from docker-compose.yaml, then the container would be named automatically by docker-compose - 
+similar to the service, but prefixed with the name of the docker-compose stack (the foldername where docker-compose.yaml is located).
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+i think that the command "sudo docker-compose exec  myappp  cat /run/secrets/texty" is a little bit wrong as all the time displays there is no such service while i have a servicer with that name, 
+a possible solution is to give the command 
+sudo docker exec -it myappp sh.......and from there go to /run/secrets and display the text inside the secret txt via the container which is deployed from the command " docker compose up -d "
+
+and from the time that we see that we are wondering how did our secret get in there right?
+because we don't have the database....
+well it turns out that some stuff are performed behind the scenes......that what's actually happening with compose is not secure but it works
+it basically bind mounts at runtime that actually file on my hard drive into the container 
+
+so is really just doing a -v with that particular file in the background, again this is totally not secure and it's not supposed to be 
+but its a way to get around this problem and allow us to develop witn the same process and the same environment secret information that we would have in production,
+only now we can do it locally too......which is great because now that means we can develop using the samje launch scripts and the same way we get the environment variables into our container 
+just like we would in swarm and that's what we really want, we want to match our production environment as much as we possibly can locally.
+you need the latest version of docker compose to do this.....
+
+it is a believe that it only works in docker compose 11, so i hopw you think that's preety cool because that was a good compromise for them to make in order to lets us use the same secret 
+commands. 
+
+now it will be pointed out that this only works with file-based secrets and not with the external that we talkwed about \
+
+so if we look at the compose filw really quick........
+
+
+
+version: "3.1"
+
+services:
+   psql:
+     container_name: myappp
+     image: postgres
+     secrets:
+       - texty
+       - textyy
+     environment:
+       POSTGRES_PASSWORD_FILE: C:/Users/michael.kourbelis/Desktop/composeea/texty
+       POSTGRES_USER_FILE: C:/Users/michael.kourbelis/Desktop/composeea/textyy
+secrets:
+  texty:
+      file: ./texty.txt
+  textyy:
+      file: ./textyy.txt
+
+
+i would have to use file-based ones for my local development, somaybe if you are using external in your production you just might have to have a different compose file for your development that 
+would have the file attribute here " file: ./texty.txt "  and specify sample dummy files in the  same directory or somewhere else you might store them that are just using simple password for development 
+
+
+
+
+
+
+sudo docker service create --name myappp --secret texty --secret textyy -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/composeea/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/composeea/textyy nginx:alpine
+
+sudo docker exec -it composeea_psql_1 sh
+
+
+
+This is the equivalent of docker exec. With this subcommand you can run arbitrary commands in your services. Commands are by default allocating a TTY, 
+so you can use a command such as docker-compose exec web sh to get an interactive prompt.
+
+
+
+22--------------------------------------------------------using secrets with local Docker compose-----------------------------------------------------------------------
+
+23--------------------------------------------------------full app lifecycle: dev build and deploy with a single compose design-----------------------------------------------------------------------
+
+in this section we covered a lot about swarm, swarm stacks and secrets are kind of like a trilogy of awesome features that can really make things much easier in production for us.
+but i want to show you  what it might be like if you actually took your compose files, organize them in a couple of ways and this is what i basically call living the dream.
+
+It turns out that you can actually use a single file to do a lot of things but sometimes your complexity grows and you are gonna need multiple compose files.....
+i want to just run through real quick......you don't actually have to do this yourself if you don't want to, i am just going to show you an example of how these compose files might work together 
+to build up your environment as you go.
+
+-local docker-compose up developmen environment 
+in this scenario we are going to use docker compose up for our local development environment   
+
+-remote docker-compose up CI environment 
+we are going to use a docker compose up config and file for our CI environment to do integration testing 
+
+-remote docker stack deploy production environment
+and then in production we are going to use those files for docker stack deploy to actually deploy the production environment with a stack.....
+
+
+
+so i am on my local machine and we are going to be using the example of the drupal scenario with a database server and a web frontend 
+we have the dockerfile we have used in our previous assignments.....we are rebuilding a custom yet simple drupal config with a template 
+and then we are going to have this default compose file (docker-compose.yml).
+
+
+
+
+docker-compose.yml
+------------------
+
+version: "3.1"
+
+services:
+  drupal:
+     image: bretfisher/custom-drupal:latest
+
+postgres:
+     image: postgres:9.6
+
+
+and that we are going to do is called "override", an override is where i have the standard docker compose file and it sets the defaults that are the same across all  
+my environments....then i have this override file that by default docker-compose if it's named this exact name docker-compose.override.yml   
+it will automatically bring this in whenever i do a docker compose up. 
+
+you will see that in this scenario we are assuming local development because we really want the hand typed commands we are going to type to be easiest locally, 
+normally in your CI environment it's all automated so we dont really care if those commands are a little bit longer or we really want locally is the easy docker compose up.
+so the really cool thing is docker compose will read this file automatically and it will apply this over top or override any settings in the docker compose.yml file 
+and notice on the above yaml file on the drupal settings i don't have the image name    
+because its specified on the yaml file above.....now in the override yaml file below i override 
+by saying i want to build the image locally using the dockerfile in this current directory (  build: .)
+i want to create a port on 8080 for local development and i am setting up some volumes and you will even notice i gave you an example here of a bind mount, where i might be doing a custom 
+theme (- ./themes:var/www/html/themes), and i want to mount my theme on my host into the container like we did in previous sections, so that i can change it locally and then see it right away on the server 
+and by the way for this example i don't actually know how to develop themes in drupal i am not exactly sure that if i change a file in there it will automatically be reflected, 
+i just wanted to show an example of how when you're doing development in web typically this is the way you would do it without having to stop and start the compose every time.
+
+down here and under the postgres we have the environment variable 
+( - POSTGRES_PASSWORD_FILE=/run/secrets/psql-pw)
+and the secret settings like before we have the defined volumes and you will see at the bottom i actually have the file-based secret
+(file: psql-fake-password.txt) because when we are doing local development 
+we have to use the file-based secret.
+
+
+docker-compose.override.yml
+--------------------------
+
+version: "3.1"
+
+services:
+
+   drupal:
+     build: .
+     ports:
+       - "8080:80"
+     volumes:
+       - drupal-modules:/var/www/html/modules
+       - drupal-profiles:/var/www/html/profiles
+       - drupal-sites:/var/www/html/sites
+       - ./themes:var/www/html/themes
+    
+    postgres:
+       environment:
+          - POSTGRES_PASSWORD_FILE=/run/secrets/psql-pw
+       secrets:
+          - psql-pw
+       volumes:
+          - drupal-data:/var/lib/postgresql/data
+
+volumes:
+   drupal-data:
+   drupal-modules:
+   drupal-profiles:
+   drupal-sites:
+   drupal-themes:
+
+secrets:
+  psql-pw:
+     file: psql-fake-password.txt
+
+
+
+but things get a little interesting when i look at this prod (docker-compose.prod.yml) or test (docker-compose.test.yml) files and the way this is gonna work is, 
+remember that the .override.yml file automatically gets picked up by the docker compose command line......while in prod or test i am going to have to specify them manually.
+and so for test we are going to have to use the -f command.
+
+because if you remember from earlier sections the -f is when we do a docker compose that we want to specify a custom file....and that is going to be shown in a minute.
+and then in production since we are not going to actually have the docker compose command line on a production server what we are going to do here is we are actually going to use a docker compose
+config command and the config command is actually going to do an output by squishing together or combining the output of  multiple config files and tis is really cool.
+
+really quick the test file just has the drupal and the postgres and imagine that if this was your jenkins CI or codeship CI solution where i want it to build the image every time 
+i commit my code and i want to call it this and i want it to be on this port for testing purposes. 
+
+
+docker-compose.test.yml
+-----------------------
+
+version: "3.1"
+
+services:
+
+   drupal:
+     image: bretfisher/custom-drupal
+     build: .
+     ports:
+       - "80:80"
+    
+    postgres:
+      environment:
+         -POSTGRES_PASSWORD_FILE=/run/secrets/psql-pw
+      secrets:
+         -psql-pw
+      volumes:
+        - ./sample-data:/var/lib/postgesql/data
+secrets:
+   psql-pw:
+      file: psql-fake-password.txt
+
+
+
+
+
+And then i am going to use a fake password. but i don't need to define any of the volumes because i am not going to actually try to keep named volume data because again it's just a CI platform 
+so as soon as it passes test or fails tests it will get rid of everything.
+and then in this scenario you might see that i ve actually go this sample data scenario where maybe in you CI solution you have simply databases sitting there that come from either a custom GIT repository
+or maybe they are FTP downloaded, or something happens during the initialization of your CI where it actually downloads a database file.
+And instead of us having to create our database every single time we do CI testing we would just mount this directory of sample data into where our postgress data is supposed to be and that way we could
+guarantee we had the same sample data every single time we do a CI test.
+
+so i am not going to go into that any further, i just wanted to show that might be how this file for CI would be different...and then in production we have all of our normal production concerns.
+
+we are specifying volumes for our specific data, we are specifying our secret and notice down at the bottom we have the external secret because we are going to have put the secret in already via the command
+line like we did in the earlier assignment.
+
+docker-compose.prod.yml
+-----------------------
+
+version: "3.1"
+
+services:
+
+   drupal:
+     ports:
+       - "8080:80"
+     volumes:
+       - drupal-modules:/var/www/html/modules
+       - drupal-profiles:/var/www/html/profiles
+       - drupal-sites:/var/www/html/sites
+       - drupal-themes:var/www/html/themes
+    
+    postgres:
+       environment:
+          - POSTGRES_PASSWORD_FILE=/run/secrets/psql-pw
+       secrets:
+          - psql-pw
+       volumes:
+          - drupal-data:/var/lib/postgresql/data
+
+volumes:
+   drupal-data:
+   drupal-modules:
+   drupal-profiles:
+   drupal-sites:
+   drupal-themes:
+
+secrets:
+  psql-pw:
+     external: true
+
+
+
+
+the point here is that all three of these configs are different in someway but they all relate to the core config or the base config which just defines the two service3s and their images,
+you can see below where it is a reminder  of what it looks like 
+
+
+ 
+version: "3.1"
+
+services:
+
+   drupal:
+     image: bretfisher/custom-drupal:latest
+    
+    postgres:
+     image: postgres:9.6
+
+
+ 
+so lets exit this and go to run some commands....when you look at the directory that contains the above files you will see that you have the base file and then three override files and again 
+remember that the override.yml file is the default so if you do docker-compose up what it will actually do here is use the docker-compose.yml first and then it will overlay the "...override.yml " file on top.
+
+
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up
+ERROR: The Compose file './docker-compose.yml' is invalid because:
+Invalid top-level property "postgres". Valid top-level sections for this Compose file are: services, secrets, version, networks, volumes, and extensions starting with "x-".
+
+You might be seeing this error because you're using the wrong Compose file version. Either specify a supported version (e.g "2.2" or "3.3") and place your service definitions
+under the `services` key, or omit the `version` key and place your service definitions at the root of the file to use version 1.
+For more on the Compose file format versions, see https://docs.docker.com/compose/compose-file/
+
+
+
+
+
+i want to put a -d in tat command above so we can take a quick look after it started " docker compose up -d "  then we inspect that drupal image but first we must list the images  
+
+
+----------------------------------
+Dockerfile
+docker-compose.override.yml
+docker-compose.prod.yml
+docker-compose.test.yml
+docker-compose.yml
+psql-fake-password.txt
+themes
+----------------------------------
+
+
+
+well lets erase some things........
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+sudo docker container ls 
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS     NAMES
+4d80f1428005   nginx:latest   "/docker-entrypoint.…"   12 minutes ago   Up 12 minutes   80/tcp    mapas.1.dmcfk4wakyisbdo9gf2bq1i9g
+dd051f11a282   nginx:alpine   "/docker-entrypoint.…"   2 hours ago      Up 2 hours      80/tcp    myappp.1.df4ad7lxyk8xss0ztyr4qgxwx
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+sudo docker rm -f 4d80f1428005 dd051f11a282
+4d80f1428005
+dd051f11a282
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE             PORTS
+zainugmyv609   mapas     replicated   1/1        nginx:latest      
+ce329ganf7rt   myappp    replicated   1/1        nginx:alpine      
+crp3mdp2hwxa   psql      replicated   0/1        postgres:latest   
+e832eok2jwz8   psqll     replicated   1/1        postgres:9.6      
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+sudo docker service rm zainugmyv609 ce329ganf7rt crp3mdp2hwxa e832eok2jwz8
+zainugmyv609
+ce329ganf7rt
+crp3mdp2hwxa
+e832eok2jwz8
+mike@mike-VirtualBox:~/Desktop/newguy$
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+sudo docker-compose down
+Removing queue ... done
+Removing network newguy_default
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker swarm leave --force
+Node left the swarm.
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+      sudo docker service create --name psqll --secret xfile -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/texty -e POSTGRES_USER_FILE=/home/mike/Desktop/newguy/texty postgres:9.6
+
+      sudo docker secret create xfile psql-fake-password.txt
+
+      sudo docker service ps psql
+
+      sudo docker container ls
+
+      sudo docker exec -it  psql.1.deiqcmi6niq5qc8uixusq915n bash
+
+      sudo docker stack deploy -c docker-compose.yml mydb
+
+      sudo docker secret ls
+
+      sudo docker-compose up -d
+
+
+
+docker-compose.yml.....wrong
+---------------------------
+version: "3.1"
+services:
+   psql:
+     container_name: queue
+     image: postgres
+   drupal: 
+     image: bretfisher/custom-drupal:latest  
+postgres:
+     image: postgres:9.6
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up
+ERROR: The Compose file './docker-compose.yml' is invalid because:
+Invalid top-level property "postgres". Valid top-level sections for this Compose file are: services, secrets, version, networks, volumes, and extensions starting with "x-".
+
+You might be seeing this error because you're using the wrong Compose file version. Either specify a supported version (e.g "2.2" or "3.3") and place your service definitions under the `services` key, or omit the `version` key and place your service definitions at the root of the file to use version 1.
+For more on the Compose file format versions, see https://docs.docker.com/compose/compose-file/
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up
+Creating network "newguy_default" with the default driver
+Pulling drupal (bretfisher/custom-drupal:latest)...
+ERROR: pull access denied for bretfisher/custom-drupal, repository does not exist or may require 'docker login': denied: requested access to the resource is denied
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up
+
+
+
+
+
+docker-compose.yml.....right
+---------------------------
+version: "3.1"
+
+
+
+services:
+
+   psql:
+
+     container_name: queue
+
+     image: postgres
+
+   drupal: 
+
+     image: drupal:latest  
+
+   postgres:
+
+     image: postgres:9.6
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up
+Pulling drupal (drupal:latest)...
+latest: Pulling from library/drupal
+42c077c10790: Already exists
+8934009a9160: Pull complete
+5357ac116991: Pull complete
+54ae63894b5a: Pull complete
+772088206f85: Pull complete
+3b81c5474649: Pull complete
+c62a528527ae: Pull complete
+a8da7928e679: Pull complete
+caa0c876b41f: Pull complete
+bf79d6223250: Pull complete
+7ff0e31f4907: Pull complete
+b97ccd5e9d41: Pull complete
+dfd678d49771: Pull complete
+8d484bba0b8a: Pull complete
+5e3b1051578f: Pull complete
+e4d2768b1274: Pull complete
+6b3a79995de4: Pull complete
+638c7ac7a58d: Pull complete
+Digest: sha256:99acd8c2f1e7af6b4000751af117f9c624d43f70497f7150bc3c8416c6fd2e32
+Status: Downloaded newer image for drupal:latest
+Pulling postgres (postgres:9.6)...
+9.6: Pulling from library/postgres
+Digest: sha256:caddd35b05cdd56c614ab1f674e63be778e0abdf54e71a7507ff3e28d4902698
+Status: Downloaded newer image for postgres:9.6
+Creating queue ... 
+Creating newguy_drupal_1 ... 
+Creating newguy_postgres_1 ... 
+Creating queue
+Creating newguy_drupal_1
+Creating newguy_postgres_1 ... done
+Attaching to newguy_drupal_1, queue, newguy_postgres_1
+drupal_1    | AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.20.0.2. Set the 'ServerName' directive globally to suppress this message
+drupal_1    | AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.20.0.2. Set the 'ServerName' directive globally to suppress this message
+drupal_1    | [Thu Jun 16 08:54:04.466052 2022] [mpm_prefork:notice] [pid 1] AH00163: Apache/2.4.53 (Debian) PHP/8.0.20 configured -- resuming normal operations
+drupal_1    | [Thu Jun 16 08:54:04.477697 2022] [core:notice] [pid 1] AH00094: Command line: 'apache2 -D FOREGROUND'
+
+queue       | Error: Database is uninitialized and superuser password is not specified.
+queue       |        You must specify POSTGRES_PASSWORD to a non-empty value for the
+queue       |        superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".
+queue       | 
+queue       |        You may also use "POSTGRES_HOST_AUTH_METHOD=trust" to allow all
+queue       |        connections without a password. This is *not* recommended.
+queue       | 
+queue       |        See PostgreSQL documentation about "trust":
+queue       |        https://www.postgresql.org/docs/current/auth-trust.html
+
+
+postgres_1  | Error: Database is uninitialized and superuser password is not specified.
+postgres_1  |        You must specify POSTGRES_PASSWORD to a non-empty value for the
+postgres_1  |        superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".
+postgres_1  | 
+postgres_1  |        You may also use "POSTGRES_HOST_AUTH_METHOD=trust" to allow all
+postgres_1  |        connections without a password. This is *not* recommended.
+postgres_1  | 
+postgres_1  |        See PostgreSQL documentation about "trust":
+postgres_1  |        https://www.postgresql.org/docs/current/auth-trust.html
+
+queue exited with code 1
+newguy_postgres_1 exited with code 1................................................
+
+and stacks here...and when i try to list the containers it has nothing to show so i think i must
+create the service before that but with  sudo docker-compose up -d it creates the container but not the service 
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up -d
+
+Starting newguy_drupal_1 ... 
+Starting queue ... 
+Starting newguy_drupal_1
+Starting newguy_postgres_1 ... 
+Starting queue
+Starting newguy_postgres_1
+Starting newguy_drupal_1 ... done
+Starting newguy_postgres_1 ... done
+Starting queue ... done
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker container ls
+CONTAINER ID   IMAGE           COMMAND                  CREATED         STATUS          PORTS     NAMES
+c64d0de19182   drupal:latest   "docker-php-entrypoi…"   9 minutes ago   Up 18 seconds   80/tcp    newguy_drupal_1
+
+
+
+      sudo docker secret create xfile psqlfakepassword.txt
+
+      sudo docker service create --name mapas --secret xfile -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/psqlfakepassword nginx
+
+      sudo docker service ps psql
+
+      sudo docker container ls
+
+      sudo docker exec -it   mydb_drupal.1.3gb4a90v8w2jp0fx59tttsgch  bash
+
+       sudo docker exec -it   mapas.1.ipec3jk75fd7cpknvut3urw15 bash
+
+      sudo docker stack deploy -c docker-compose.yml mydb
+
+      sudo docker secret ls
+
+      sudo docker-compose up -d
+
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker service create --name mapas --secret xfile -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/psql-fake-password nginx
+secret not found: xfile
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker secret create xfile psql-fake-password.txt
+pq3rqcwggz2xgwo9crcn77yf9
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker service create --name mapas --secret xfile -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/psql-fake-password nginx
+df4zuc4jczayeekus418ed03i
+overall progress: 1 out of 1 tasks 
+1/1: running   [==================================================>] 
+verify: Service converged 
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker-compose up
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Starting queue ... 
+Starting newguy_drupal_1 ... 
+Starting queue
+Starting newguy_postgres_1 ... 
+Starting newguy_drupal_1
+Starting newguy_postgres_1 ... done
+Attaching to queue, newguy_drupal_1, newguy_postgres_1
+queue       | Error: Database is uninitialized and superuser password is not specified.
+queue       |        You must specify POSTGRES_PASSWORD to a non-empty value for the
+queue       |        superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".
+queue       | 
+queue       |        You may also use "POSTGRES_HOST_AUTH_METHOD=trust" to allow all
+queue       |        connections without a password. This is *not* recommended.
+queue       | 
+queue       |        See PostgreSQL documentation about "trust":
+queue       |        https://www.postgresql.org/docs/current/auth-trust.html
+queue exited with code 1
+drupal_1    | AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.21.0.3. Set the 'ServerName' directive globally to suppress this message
+drupal_1    | AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 172.21.0.3. Set the 'ServerName' directive globally to suppress this message
+drupal_1    | [Thu Jun 16 09:26:00.956641 2022] [mpm_prefork:notice] [pid 1] AH00163: Apache/2.4.53 (Debian) PHP/8.0.20 configured -- resuming normal operations
+drupal_1    | [Thu Jun 16 09:26:00.956795 2022] [core:notice] [pid 1] AH00094: Command line: 'apache2 -D FOREGROUND'
+postgres_1  | Error: Database is uninitialized and superuser password is not specified.
+postgres_1  |        You must specify POSTGRES_PASSWORD to a non-empty value for the
+postgres_1  |        superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".
+postgres_1  | 
+postgres_1  |        You may also use "POSTGRES_HOST_AUTH_METHOD=trust" to allow all
+postgres_1  |        connections without a password. This is *not* recommended.
+postgres_1  | 
+postgres_1  |        See PostgreSQL documentation about "trust":
+postgres_1  |        https://www.postgresql.org/docs/current/auth-trust.html
+newguy_postgres_1 exited with code 1
+^CGracefully stopping... (press Ctrl+C again to force)
+Stopping newguy_drupal_1 ... done
+mike@mike-VirtualBox:~/Desktop/newguy$    sudo docker-compose up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Starting newguy_drupal_1 ... 
+Starting queue ... 
+Starting newguy_drupal_1
+Starting queue
+Starting newguy_postgres_1 ... 
+Starting newguy_postgres_1 ... done
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker container ls
+CONTAINER ID   IMAGE           COMMAND                  CREATED         STATUS          PORTS     NAMES
+d71156af793a   nginx:latest    "/docker-entrypoint.…"   2 minutes ago   Up 2 minutes    80/tcp    mapas.1.uas7velkzhroo6s1yjap2166o
+9e7c47be5d20   drupal:latest   "docker-php-entrypoi…"   5 minutes ago   Up 18 seconds   80/tcp    newguy_drupal_1.......................we are interested on this container
+mike@mike-VirtualBox:~/Desktop/newguy$     sudo docker service  ls
+ID             NAME      MODE         REPLICAS   IMAGE          PORTS
+df4zuc4jczay   mapas     replicated   1/1        nginx:latest   
+
+
+
+so to sum up we performed some changes to the docker-compose.yml file from this 
+
+
+version: "3.1"
+services:
+  drupal:
+     image: bretfisher/custom-drupal:latest
+postgres:
+     image: postgres:9.6
+
+
+to this 
+
+
+version: "3.1"
+services:
+   psql:
+     container_name: queue
+     image: postgres
+   drupal: 
+     image: drupal:latest  
+   postgres:
+     image: postgres:9.6
+
+and now we are ready to combine it with the docker-compose.override.yml that we get it ouit from te folder " /home/mike/Desktop/newguy " as it casued a lot of problems....lets go 
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Creating volume "newguy_drupal-modules" with default driver
+Creating volume "newguy_drupal-sites" with default driver
+Creating volume "newguy_drupal-profiles" with default driver
+Creating volume "newguy_drupal-data" with default driver
+Creating volume "newguy_drupal-themes" with default driver
+Recreating newguy_postgres_1 ... 
+Recreating newguy_drupal_1 ... 
+Recreating newguy_postgres_1
+Starting queue ... 
+Recreating newguy_drupal_1
+Starting queue
+WARNING: Service "postgres" is using volume "/var/lib/postgresql/data" from the previous container. 
+Host mapping "newguy_drupal-data" has no effect. Remove the existing containers (with `docker-compose rmRecreating newguy_drupal_1 ... error
+
+ERROR: for newguy_drupal_1  Cannot create container for service drupal: invalid volume specification: 
+'/home/mike/Desktop/newguy/themes:var/www/html/themes:rw': invalid mount config for type "bind": invalid mount path: 'var/www/html/themes' mount path must be absolute
+
+ERROR: for drupal  Cannot create container for service drupal: invalid volume specification: 
+'/home/mike/Desktop/newguy/themes:var/www/html/themes:rw': invalid mount config for type "bind": invalid mount path: 'var/www/html/themes' mount path must be absolute
+ERROR: Encountered errors while bringing up the project.
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+now we are goingn to delete the service that we created above 
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Starting newguy_postgres_1 ... 
+Recreating 9e7c47be5d20_9e7c47be5d20_newguy_drupal_1 ... 
+Starting newguy_postgres_1
+Starting queue ... 
+Recreating 9e7c47be5d20_9e7c47be5d20_newguy_drupal_1
+Recreating 9e7c47be5d20_9e7c47be5d20_newguy_drupal_1 ... error
+
+ERROR: for 9e7c47be5d20_9e7c47be5d20_newguy_drupal_1  
+Cannot create container for service drupal: 
+invalid volume specification: '/home/mike/Desktop/newguy/themes:var/www/html/themes:rw': 
+invalid mount conStarting queue ... done
+
+ERROR: for drupal  Cannot create container for service drupal: invalid volume specification: '/home/mike/Desktop/newguy/themes:var/www/html/themes:rw': 
+invalid mount config for type "bind": invalid mount path: 'var/www/html/themes' mount path must be absolute
+ERROR: Encountered errors while bringing up the project.
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+so we google the following error.......
+Cannot create container for service drupal: invalid volume specification:
+
+and we get an answer that we must change the line " - ./themes:var/www/html/themes " in docker-compose.ovveride.yml the with this " - ./themes/:/var/www/html/themes "
+
+and theeeeeen yes.....................
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Recreating newguy_postgres_1 ... 
+Starting newguy_drupal_1 ... 
+Recreating newguy_postgres_1
+Recreating newguy_postgres_1 ... done
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker container ls
+CONTAINER ID   IMAGE           COMMAND                  CREATED         STATUS          PORTS                                   NAMES
+ea5a4386ec78   drupal:latest   "docker-php-entrypoi…"   8 minutes ago   Up 22 seconds   0.0.0.0:8080->80/tcp, :::8080->80/tcp   newguy_drupal_1
+
+
+
+
+yes but we use the docker-compose up -d and we didn't make the override.....
+
+
+all this time is spent my time to something that has no meaning because the acttual command is docker-compose up -d and the container with the secret is created with the 
+service command...take a look below and cu tommorow here....
+
+
+
+so we are here today to run the docker-compose up  command in order to use the docker-compose.yml first and then to overlay the docker-compose.ovveride.yml on top......
+i want to put -d on this command and make it like " docker-compose up -d " with the view to take a quick look after it started.....
+
+
+      sudo docker secret create xfiles texty.txt
+
+      sudo docker service create --name alien --secret xfiles -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/texty nginx
+
+      sudo docker-compose up -d 
+
+
+
+
+and then we do a docker inspect on the drupal image but before we do docker conatiner ls so as to know where to do that inspect....
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker container ls
+CONTAINER ID   IMAGE           COMMAND                  CREATED         STATUS          PORTS                                   NAMES
+e503002052e2   nginx:latest    "/docker-entrypoint.…"   2 minutes ago   Up 2 minutes    80/tcp                                  alien.1.fg5umdk1d1zg75jpahhqt6yvs
+adfb409e6a4e   newguy_drupal   "httpd-foreground"       19 hours ago    Up 14 seconds   0.0.0.0:8080->80/tcp, :::8080->80/tcp   newguy_drupal_1
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+
+so we do docker inspect on newguy_drupal_1........and i wanted to show you that in here it has all the mounts listed so we know that it took the override  file because the override file 
+was where we defined all of these mounts....so we know that it picked that upand obviously if it didn't pick up the base one it wouldn't even know what images to use so it would actually 
+be complaining to us and saying that the compose file was incomplete.......
+
+"Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/mike/Desktop/newguy/texty.txt",
+                "Destination": "/run/secrets/texty",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "newguy_drupal-modules",
+                "Source": "/var/lib/docker/volumes/newguy_drupal-modules/_data",
+                "Destination": "/var/www/html/modules",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "volume",
+                "Name": "newguy_drupal-profiles",
+                "Source": "/var/lib/docker/volumes/newguy_drupal-profiles/_data",
+                "Destination": "/var/www/html/profiles",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "volume",
+                "Name": "newguy_drupal-sites",
+                "Source": "/var/lib/docker/volumes/newguy_drupal-sites/_data",
+                "Destination": "/var/www/html/sites",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "bind",
+                "Source": "/home/mike/Desktop/newguy/themes",
+                "Destination": "/var/www/html/themes",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": "rprivate"
+            }
+        ],
+
+so that one worked..... lets do a down really quick......docker-compose down 
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose down
+[sudo] password for mike: 
+Stopping newguy_drupal_1 ... done
+Removing newguy_postgres_1 ... done
+Removing newguy_drupal_1   ... done
+Removing network newguy_default
+mike@mike-VirtualBox:~/Desktop/newguy$
+
+
+so if we were going to actually do the command we needed for our CI solution what we would have to do on our ci solution was to make sure that Docker compose was there and installed and available 
+so that we could do docker compose commands.....then specify the -f  flag and then the order of the f's is that the base file always needs to be first e.g. 
+first we put the docker-compose.yml and then the  docker-compose.test.yml
+
+docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Creating network "newguy_default" with the default driver
+Creating newguy_drupal_1 ... 
+Creating newguy_postgres_1 ... 
+Creating newguy_drupal_1
+Creating newguy_drupal_1 ... done
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+
+
+
+and if we did this with an up at the end and a - d and then i went and inspect that same drupal you will notice that there is no bind mounts based on the video  they are completely missing
+because in the test file we didn't specify those we didn't actually need drupal to save information because it was going to be thrown away at the end  of our CI run 
+
+but in my case because i am spiderman  i have one  
+
+
+
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/mike/Desktop/newguy/texty.txt",
+                "Destination": "/run/secrets/texty",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            }
+        ],
+
+and then third we have the production config, now the production config is going to be a little but different as instead of the up command i put a config and if you combine it with the --help 
+for the config you will see that it has two options and neither one of  those are really relevant in this situation, 
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose -f docker-compose.yml -f docker-compose.prod.yml config --help
+[sudo] password for mike: 
+Validate and view the Compose file.
+
+Usage: config [options]
+
+Options:
+    --resolve-image-digests  Pin image tags to digests.
+    -q, --quiet              Only validate the configuration, don't print
+                             anything.
+    --services               Print the service names, one per line.
+    --volumes                Print the volume names, one per line.
+mike@mike-VirtualBox:~/Desktop/newguy$
+
+
+what we want to do is just run config by itself, and what its going to actually do is look at both files and push them together into a single compose file equivalent 
+
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose -f docker-compose.yml -f docker-compose.prod.yml config
+ERROR: yaml.parser.ParserError: while parsing a block mapping
+  in "./docker-compose.prod.yml", line 5, column 4
+expected <block end>, but found '<block mapping start>'
+  in "./docker-compose.prod.yml", line 15, column 5
+
+
+here i alligned the postgres key with the drupal 
+
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose -f docker-compose.yml -f docker-compose.prod.yml config
+ERROR: The Compose file is invalid because:
+Service drupal has neither an image nor a build context specified. At least one must be provided.
+
+here i put the " image: drupal " below the drupal key......
+
+
+mike@mike-VirtualBox:~/Desktop/newguy$ sudo docker-compose -f docker-compose.yml -f docker-compose.prod.yml config
+secrets:
+  texty:
+    external: true
+services:
+  drupal:
+    image: drupal
+    ports:
+    - 80:80/tcp
+    volumes:
+    - drupal-modules:/var/www/html/modules:rw
+    - drupal-profiles:/var/www/html/profiles:rw
+    - drupal-sites:/var/www/html/sites:rw
+    - drupal-themes:var/www/html/themes:rw
+  postgres:
+    environment:
+      POSTGRES_PASSWORD_FILE: /home/mike/Desktop/newguy/texty
+    image: postgres:9.6
+    secrets:
+    - source: texty
+    volumes:
+    - drupal-data:/var/lib/postgresql/data:rw
+version: '3.1'
+volumes:
+  drupal-data: {}
+  drupal-modules: {}
+  drupal-profiles: {}
+  drupal-sites: {}
+  drupal-themes: {}
+
+mike@mike-VirtualBox:~/Desktop/newguy$ 
+
+
+and  so what we could do here is just run this command somewhere in our CI solution, and then have an output to a file maybe with you know
+the following command.....
+
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml config > output.yml
+
+that output file would be the one that we would use officially to create in production to create or update our stack.
+
+
+however i want to throw in a liitle caviar  here the below stuff are relatively new.....
+
+local docker-compose up development environment
+remote docker-compose up CI environment
+remote docker stack deploy production environment 
+
+
+
+we know that secrets and swarm stacks are relatively new, they are a couple of months old as of this recording and so there are couple of rough edges.....
+note: docker-compose -f a.yml -f b.yml config......mostly works 
+
+we just ran that config command and you'll actually notice that the secrets weren't listed in there...that'a bug currently i am actually working with the docker team to see if we can squash that bug 
+so by the time you read this it may be already been fixed and make sure you inspect that output of the config line before you go to deploying in production 
+
+
+and secondly the compose extends option (note: compose extends: doesn't work yet in stacks ) which i did not discuss here is another way to override these compose files where you actually use the 
+override file and you actually define an extends section in there.....its a little bit more declarative so it's easier to understand  but know that the extends option doesn't yet work in swarm stacks,
+so i didn't mention it here because it doesn't really give you the full app lifecycle that we were hoping for, but id do expect them at some point to do something about that...like either add it 
+into swarm or create a bettwr workflow because that's really the idea we are tru=ying to get to with all of these tools is to have a complete and easy lifecycle from development all the way through test 
+into production with the same set of configurations, in the same set of images.....
+
+so i hope this got you thinking about how you might make your apps this way and how you might extend your own compose files for complex scenarios.....because nothing puts a smile on my face 
+faster with docker than when i see someone run a one line command to do something that previously took multiple script to execute 
+
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml config --help
+
+      sudo docker secret create xfiles texty.txt
+
+      sudo docker service create --name alien --secret xfiles -e POSTGRES_PASSWORD_FILE=/home/mike/Desktop/newguy/texty nginx
+
+      sudo docker-compose up -d 
+
+      sudo docker service ps psql
+
+      sudo docker container ls
+
+      sudo docker exec -it   mydb_drupal.1.3gb4a90v8w2jp0fx59tttsgch  bash
+
+      sudo docker exec -it   mapas.1.ipec3jk75fd7cpknvut3urw15 bash
+
+      sudo docker stack deploy -c docker-compose.yml mydb
+
+      sudo docker secret ls
+
+      sudo docker-compose up -d
+
+
+23--------------------------------------------------------full app lifecycle: dev build and deploy with a single compose design-----------------------------------------------------------------------
+
+24--------------------------------------------------------service updates: changing things in flight--------------------------------------------------------------------------------------------------
+
+service updates you ve probably assumed all along that there some way to update your services even though we haven't been focusing on that yet...but lets talk about it because
+updates has a whole lot of stuff going on under the covers.
+swarm's update is centered around a rolling update pattern for your replicas which means if you have a service with more than one replica and hopefully you do....
+it's going to roll through them by default one at a time updating each container by replacing it with the new settings that you're putting in the update command.
+a lot of people will say that orchestrators prevent downtime in updates but i am not going to say that this prevents downtime i am going to say it limits 
+downtime.
+because preventing downtime in any system is the job pf testing.
+you really need to start testing......how you do your updates and determining...
+does it impact ny users ?
+does updating a database impact my webapplication ?......it probably does
+
+each application that you have a service for is going to update and impact the other things around it differently,
+that's not the job of an orchestrator as an orchestrator can't determine that this one is a database protocol and this one is a REST application protocol that's easy 
+so those are going to be different complicated things that you need to deal with, so in the case of service updates, 
+
+if it's just a rest api or  a web frontend that's not doing anything 
+fancy like web sockets or long polling if its something very simple like that or a static website you will probably have an easy update and it won't be a problem,
+but other services like databases or persistent storage or anything that requires a persistent connection, those are always going to be a challenge no matter what you are trying to update 
+so test early and test often......
+
+now like i said before this will definately replace containers in most updates, unless you're updating a label or some other metadata with the service, 
+it's going to roll through and change out each container with a tottaly new one........so just be prepared for that, 
+it has many options, in fact the last i counted there was at least 77 options for the update command, but just about everything you want to do can be tweaked.
+so a lot of the options in the update command are actually create options that just have a "-rm" and a "-add" on the end of them.
+because if its an option  that can be used for multiple values so lets say a port to publish or an environment variable, those you can use many of them right, so you need to be able to tell the update 
+command which ones you are adding and which ones you are removing and we will see those in a minute......
+this also included rollback and health check options, so you should look at the options for those and see if their defaulty values aren't ideal for your application and test different settings 
+to see if it makes an update easier for you and your system.
+
+
+
+....also has scale & rollback subcommand for quicker access
+    docker service scale web=4 and docker service rollback web
+you also will see that we have scale and rollback options in here that are their own commands now. 
+they useed to be options that you had to specify with the --rollback or --scale, but so many people have been using those so frequently that docker is now making them sort of first class citizens 
+in the command line.
+and they might be adding more of those in the future.
+
+and lastly before we get to some examples if you are doing stacks, a stack deploy to the same stack is  an update, in fact there is no seperate option for stack updates, you just do a stck deploy 
+with the same file that's been edited....then it will work with the service commands and the networks and every other thing that it does...it will work with them to make sure if any changes are 
+necessary that they get applied....
+so lets look at some quick examples and then we will get to the command line.......
+
+
+
+swarm update examples 
+
+just update the image used to a newer version
+......docker service update --image myapp:1.2.1 <servicename>
+
+ the above example is the most common example that you will be using which is to change the image of a service, every time you update your app and you build a new image 
+ you are going to have to do a service update command with the image name and then the service name and so in this case maybe i had my application with a tag of 1.2.0
+ and then in this case i am now applying a 1.2.1. image and the service will determine .....a yes that's a different image that i have running in my service and we will go and update them
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ on the next onw we will show how you can do multiple things at once inside a single update command, you can add an environment variable with the env-add and then you can remove a port 
+ with the publish-rm 
+ we can also be adding and removing environment variables and publish ports in the same update command as much as we want 
+
+adding an environment variable and remove a port
+....docker service update --env-add NODE_ENV=production --publish-rm 8080
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+on this last one this is showing how we can use these new scale and rollback commands on multiple services at the same time.
+which is one of the advantages of using them over the update command is that they can apply to multiple services, so in this case i am actually going to be changing the number of replicas of the web and the 
+API services at the same time 
+
+change number of replicas of two services 
+docker service scale web=8 api=6
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+and like i said long time ago in the swarm updates you don't have a different deploy command, its the same docker stack deploy with the file that you have edited and its job is to work with 
+all of the other parts of the API to determine if there is any changes needed and then roll those out with a service update 
+in other words
+it is the same command, just edit the yaml file, then 
+docker stack deploy -c file.yml <stackname>
+
+
+alright lets start by actually creating a service so that we can manipulate it with some update commands 
+
+sudo docker service create -p 8088:80 --name web nginx:1.13.7
+
+..........its nice to have the detach option with our service create and update commands we can actually see this happen synchronously in real time.
+so this will be good for update commands to see how updates actually roll out via the command line 
+
+and now if we do 
+
+sudo docker service ls we will see that service running see also that it has 1/1/ replicas....so its good to go 
+so now lets scale our service up so we can have some more replicas to work.....with "docker service scale web=5"
+
+
+
+mike@mike-VirtualBox:~$ sudo docker service scale web=5
+web scaled to 5
+overall progress: 5 out of 5 tasks 
+1/5: running   [==================================================>] 
+2/5: running   [==================================================>] 
+3/5: running   [==================================================>] 
+4/5: running   [==================================================>] 
+5/5: running   [==================================================>]
+verify: Service converged 
+mike@mike-VirtualBox:~$ 
+
+
+and you just saw that one of those was already running , and you just saw that one of those was already running and the other 4 had to start.
+it is feasible for the image to be DOWNLOADED and on other nodes while its downloading and its services can be on pending states.
+
+
+
+okay so now lets do a rolling update by changing the image of that nginx  
+
+sudo docker service update --image nginx:1.13.6 web.......and you see here that i've picked an older image, now
+docker doesn't care about what the image actually is, it could be a completely different application for all it cares, 
+it just knows that in this service i am changing it to a different image.......
+
+
+sudo docker service update --image nginx:1.13.6 web 
+
+
+
+and remember by default its going to go through here one at a time, it will first remove it, create a new one and then when that's one's good to go and it looks healty...
+it will start in the next one, 
+
+in the next example we are going to change the published port, but you can't change the port, you actually have to add and remove them at the same time, 
+so in this case because we first published it with an 8088 we need to do a 
+
+docker service update --publish-rm 8088 --publish-add 9090:80 web 
+
+
+and you see that i don't need to specify the value, i just need to specify the key and then the value which in this case is 80, you will see that 
+it will do the same update process as before .........
+
+
+
+and the last example i want to talk about is kind of a tip, because you  will often have a challenge with something called rebalancing.
+or if you change the number of nodes or if you move a lot of things around.
+
+if you have a lot of containers in your swarm you may find out that they are not really evened out...you ve got some nodes that are pretty light on how many 
+containers are running and other ones that have a lot of things changing, swarm will not move things around to keep everything balanced in terms of the number 
+of resources used. but what you can do is you can force an update of a service even without changing anything in that service.
+then it will reissue tasks and in that case it will pick the least used nodes which is a form of rebalancing, so a lot of times in a smaller swarm when i move 
+something big or add a bunch of nodes i suddenly have a bunch of empty servers doing nothing and i need to get work on them, so what i do  is take one or two of  my services 
+and i will do a 
+sudo docker service update --force web
+
+.......and in this case it's going to roll through and completely replace the tasks, of course it will use the schedules default of looking for nodes 
+with the least number of containers and the least number of resources used 
+and 
+that's kind of a trick to get around an "uneven" amount of work on your nodes  
+
+
+and remember to cleanup by removing the service that we created in this lecture...........docker service rm web
+
+24--------------------------------------------------------service updates: changing things in flight--------------------------------------------------------------------------------------------------
+
+
+25--------------------------------------------------------healthchecks in dockerfiles--------------------------------------------------------------------------------------------------
+
+the docker health check command....
+
+supported in dockerfile, compose yaml, docker run and swarm services
+----------------------------------------------------------------------
+it was a new feature addeed in 1.12 which came out in the mid 2016, the same time that swarm kit and swarm mode were available in docker, it was added really as a part of that toolkit 
+but it still works in all different files like the dockerfile the compose file, the docker run command uses it, the stack files support it the service update and the service create command support it 
+its everywhere 
+
+docker engine will exec's the command in the container (e.g. curl localhost)
+----------------------------------------------------------------------------
+i higly recommend that when you are on production you do engage in testing options for this health check command...its going to work right out of the box with an exec, 
+its going to execute that command inside the container just like if you were running your own exec command.
+so its not running it from outside the container...its just running it inside which means that even simple workers that don't have exposed ports, you can run a simple command 
+in them to validate whether they are returning good data or whatever.
+
+it expects exit (0) --> ok or exit 1 -->error
+----------------------------------------------
+its a simple execution of a command which means it gets a simple return....it expects a 0 or 1 so in linux and windows you have exit codes from commands and 0 is a good thing 
+it means everything was fine and anything other than 0 is going to be an error in most applications  but in docker we need that application to exit a 1 specifically...
+so we will show in a minute how you do that, 
+three container states: starting,healthy,unhealty 
+
+there is only three states to a health check in docker, it starts out with starting.
+starting is the first 30 seconds by default where it hasn't run a healthcheck command yet.
+then its going to run one and if that returns a zero it will start with the healty, it will change to the healty option.
+it will take that command and it will run it every 30 seconds be default again.
+if it ever receives it an unhealthy return with an exit 1, then it marks it as an unhealty container.
+now we have options for controlling all of this including retries we will see that in a  minute....
+this is a much better option than we have had in the past because docker until now was just making sure the application was still running 
+it didn't have any insight into whether that application was doing what it was supposed to....
+and now we can do that inside the docker container itself.....but this isn't a replacement for your third party monitoring solution, this isn't going to give 
+you graphs or status over time or any sort of third party tooling that you would expect out of a monitoring solution, this is about docker understanding if the container 
+itself has a basic level of healthy. 
+so in an nginx it might return a localhost of the root index file.
+a return of 200 or 300 is fine and gives it an exit code of 0 and it considers it healthy...thats not a superadvanced uh you know monitoring tool 
+but if it did return 404 or 500 error, it will then consider it unhealty and we can do something about that....
+
+so where we are going to see this docker heqalthcheck in the gui ?
+so the first place is in container ls (sudo docker container ls), it will just see it has this new option
+its in the middle, we will see in a second where i will show us one of the three states if the health check is running and that's how we actually know that there is a healtcheck 
+that's the easiest way at least to know...
+
+healtcheck status shows up in docker container ls,check last 5 healtchecks with docker container inspect 
+--------------------------------------------------------------------------------------------------------
+we will see the history the last five of that healthcheck  to show up in the inspect for that container and we can see some basic trend over time there.
+
+docker run does nothing with healtchecks
+-----------------------------------------
+
+but the docker run command does not take action on an unhealthy container, once the healthcheck considers a container unhealthy docker run is just going to indicate that in the ls command 
+and in the inspect, but its not going to take action,
+
+service will replace tasks if they fail healtcheck
+---------------------------------------------------
+and that's where we expect the swarm services to tak action, so the stack and services will actually replace that container with a new task
+or a new host possibly depending on the scheduler, 
+
+service updates wait for them before continuing
+------------------------------------------------
+and even in the updates command we see a little extra bonus by using the healthchecks because the updates will consider the healtcheck as a part 
+of the rediness for that container before it goes and changes the next one....so if a container comes up bit it doesn't pass its health check then the service update won't go to the next one 
+or it will take action based on the changes you give it...  
+
+
+so lets look at a few examples before we go to the command line 
+----------------------------------------------------------------------------
+docker run \
+--health-cmd="curl -f localhost:9200/__cluster/health || false" \ 
+--health-interval=5s \
+--health-retries=3 \
+--health-timeout=2s \
+--health-start-period=15s \
+elasticsearch:2
+----------------------------------------------------------------------------
+
+this one that we are using on docker run and this allows us to use an existing image that doesn't have a health check in it and we are adding the health check in at runtime  and in this case 
+we are using the elastic search image you can see the command is a cURL localhost 9200, which is the port that the elasticsearch is running on inside the container not the published port, but inside the container
+
+for elastic search there is an actual health url, so we can use that here, you will notice the two pipes with the false at the end of that command and that's gonna be pretty common if you are using something like 
+curl or another tool that will send out an error code that's other than 1, remember when i mentioned that while ago.....we need to exit with 1 if there is a problem because that's the one problem 
+because that's the one  error code that docker is going to do something about so we need to make sure that in this case a shell will always return the false 1 exit code....
+if there is anything coming out of that command other than 0, so its a nice way to get around that problem and it just so happens with curl, curl will give other potential error codes and we don't want it to 
+do that.
+
+
+
+----------------------------------------------------
+--------------------------------
+options for healtcheck command
+--------------------------------
+
+--interval=DURATION (default: 30s)
+--timeout=DURATION (default: 30s)
+--start-period=DURATION (default: 0s)(17.09+)
+--retries=N (default: 3)
+----------------------------------------------------
+
+and in the actual docker files we can add the same command,  the format is a little bit different but you see that we have these options here, 
+we have the interval, the timeout, the start period (which is new), and retries.....
+so the interval is what you would think it is, it's by default every 30 seconds, how often it's going to run this health check.
+the timeout is how long it's going to wait before it errors out and returns a bad code  if maybe the app is slow.
+the start period is a new feature that allows us now in 17.09 and newer to give a longer wait period than the first 30 seconds of the duration before  it will always just wait
+the long....the interval time before it started the healtcheck but maybe you have a java app or database or something that takes a lot longer to start, maybe it takes five minutes.
+so you could add that start period in there it will still do healtchecks.
+but what it will do is it wont alarm on an unhealthy check until that time has elapsed  so if you set two minutes in there even though it's health checking every 30 seconds it's going to only 
+consider it unhealthy once it's past that two minute mark.
+the last one ther retries means that we will try this health x number of times before we consider it unhealthy, and that gives maybe a potentially unstable app a chance to come back with a healthy and recover on 
+its own before we consider this a truly unhealthy container 
+
+----------------------------------------------------
+basic command using defaults options 
+HEALTCHECK curl -f http://localhost/ || false
+----------------------------------------------------
+
+the basic healthcheck command you would use in a dockerfile is called HEALTHCHECK (all capital letters there).
+the same format exists where if we're just doing a simple cURL of the localhost because maybe it's a PHP app or something.
+we can do that 
+
+----------------------------------------------------------------------------------------------
+custom options with the command
+HEALTHCHECK --TIMEOUT=2s --interval=3s --retries=3 \ 
+CMD curl -f http://localhost/ || exit 1
+----------------------------------------------------------------------------------------------
+
+and this is how you add those options in to a dockerfile so you would see how i add the timeout interval and the retries before the command itself, 
+the first one ther for the basic command, notice i don't have to put the CMD flag if i am just giving it the command to run.
+but if i want to show options if i want to give it custom options out of the box with the timeout and so on, then i have to specify which one is the command.
+now these aren't two different lines.
+Notice the back slash on the end of the first line there, so don't get that confused 
+
+
+
+
+--------------------------------------------------------------
+static website running in nginx just test default url
+
+from nginx:1.13
+
+HEALTHCHECK --interval=30s --timeout=3s \
+CMD curl -f http://localhost/ || exit 1
+---------------------------------------------------------------
+
+and here we have a simple example of what it might be like if you had a static application running inside an nginx server, you could set the interval
+and the time out from your Dockerfile and you would just have it simply do a cURL command on the localhost and if it return a 200 or 300
+it considers that fine, if it returns a 4 or 4 ir something else, it considers that an error, 
+and you notice here that i have an exit 1 which is the same thing as a false. 
+i did that just to show you that ceratin examples on the internet will have a false.
+ceratin examples will have an exit 1 they both do the same thing.
+
+
+-----------------------------------------------------------------------------
+healtcheck in php nginx dockerfile
+php-fpm running behind nginx, test the nginx and fpm status URLs
+
+From you nginx php fpm combo image
+
+#don't do this if phph-fpm is another container
+#must enable php-fpm ping/status in pool.ini
+#must forward /ping and /status urls from nginx to php-fpm 
+
+HEALTHCHECK --interval=5s --timeout=3s \
+CMD curl -f http://localhost/ping  || exit 1
+-----------------------------------------------------------------------------
+
+
+
+here is a  little bit more advanced example, in this case we are using a php app that's combined with nginx 
+and what i've done is in the resources you'll find a link to this php example, i've added in a custom  nginx config file that uses nginx and php-fpm status URLs 
+so bith of these applications have their own status page and sort of a healtcheck ping url and you can use those in your apps if you are using php or nginx.
+there are two different URLs but you can use both of them inside the same healtcheck.
+in this case we are just using one of them and we are throwing in the localhost/ping which is actually a php-fpm status command, but you have to enable that inside your php-fpm.
+Again in the resources of this lecture there is a link to a php docker good defaults (https://github.com/BretFisher/php-docker-good-defaults),
+you can go check that out on a github where i've shown in this example in a little bit more detail.
+
+
+-----------------------------------------------------------------------------
+healthcheck in postgres dockerfile
+
+use a postgreSQL utility to test for ready state
+
+
+FROM postgres
+
+#specify real user with -U to prevent errors in log
+
+HEALTCHECK --interval=5s --timeout=3s \
+CMD pg_isready -U postgres || exit 1
+-----------------------------------------------------------------------------
+
+
+next we have a postgres example so in the dockerfile i can use a different URL.
+so here we have a postgres application where in the healthcheck command i am using a command of " pg_isready ".
+
+Now with different apps, there is different tools. with postgres, it comes with a built-in tool, that's a very simple testing of a connection to a postgres server 
+so it doesn't validate that you have good data or that your database is mounted properly.
+it's simply goin to say....does this database server allow connections? yes or no 
+so thats a neat one that you can do out of the box   
+
+-----------------------------------------------------------------------------
+
+healtcheck in compose/stack files
+
+version: "2.1" (minimum for healthchecks)
+services:
+  web:
+   image:nginx
+   healtcheck:
+     test:["CMD", "curl", "-f", "http://localhost"]
+     interval:1m30s
+     timeout:10s
+     retries:3
+     start_period:1m #version 3.4 minimum 
+-----------------------------------------------------------------------------
+
+
+and here is what it would look like in a compose or stack file  very similar you will notice that at the start period dow there requires a different version 
+so since the healtcheck command came out in 1.12 it was actually supported in 2.1. of this compose file.
+but if you are going to use the start period that means you have to update your compose file to version 3.4 in order t support that.
+because the start period came out over a year later after the healthcheck command did.....
+
+so lets start with some simple run commands.....
+so what we are going to do here is we are going to start postgres database server without the healtcheck because by default it doesn't come with one 
+
+and then we are going to run it again with a manual healtcheck command that will add at the command line and we will see the difference 
+
+so firts without healtcheck
+sudo docker container run --name p1 -d postgres........so here we are going to call the first one p1 and we will run it in detach mode from the official postgres image   
+                                                        and if we do docker container ls we will see that there is nothing indicating a healtcheck here 
+
+in fact when i do docker containe ls i am not able to see a thing.....
+
+when we do the same command here with the "health" command here and this time we are going to use4 the " pg_isready " 
+which we talked about earlier to test  that the connections are available on this postgres server, we are going to tell it that the 
+ user we need is the postgres user, we don't actually need to give it a password, its not going to try to log in and its going to try to validate,
+ we will use the postgres image 
+
+
+sudo docker container run --name p8 -d --health-cmd = "pg_isready -U postgres || exit 1" postgres
+
+
+and now if we made a container ls we see that the health is starting,
+so now we get this additional feature in our status of our ls command...it will stay in the starting state for the default 30 seconds until it runs the healthcheck command for the first time.
+and now that we've waited over 30 seconds you will see that it's changed to status of healthy 
+
+now if we do " docker container inspect p2 " we will see at the very top of that we have this healthy and it shows at the output that is accepting connections 
+status even though that  mine is unhealthy
+
+
+
+now we are going to do some service commands to that same database in that same test healtcheck, what we will see here when we do this is that there are three different states that a service goes through
+on starting up its preparing which is usually means its downloading the image its starting which means its executing the container and bringing it up.
+then it's running and without the healtcheck command the starting and running are very quick, they are almost instantaneous and we will see that here 
+with the command 
+docker service create --name p1 postgres 
+
+and once its done preparing by downloading the image you will see that it goes immediately from starting to running because there is no healtcheck. 
+it doesn't have anything else to do other that start the container and say yeah the binary is running......
+
+but if we do that same command docker service create and call it p2 like before and give it that same command and we start the se4rvice with that health command  built in.....
+
+docker service create --name p2 --health-cmd="pg_isready -U postgres || exit 1" postgres 
+
+
+
+
+what we will see is that it will go from preparing to starting and it will sit at the starting state for the default 30 seconds until the first healtcheck runs  
+and this now the docker service expecting a healthy state before it considers this service fully running.
+after the 30 seconds is over it will shift to the running state, 
+then we get the latest little verify there, just to make sure that it's considereed stable and then we are done  
+so you can already see out of the box that the services as well as service updates we are going to get this extra bonus of health concept if we use these commands whenever we can 
+
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE             PORTS
+78zlg7z71ymp   p1        replicated   1/1        nginx:latest      
+g7pignaf3g3g   p2        replicated   0/1        postgres:latest   
+ndtsx8abfdo9   p3        replicated   0/1        nginx:latest      
+ueg83nku2n64   p4        replicated   0/1        nginx:latest      
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ps p4
+ID             NAME       IMAGE          NODE              DESIRED STATE   CURRENT STATE             ERROR     PORTS
+wtxsu78jprhh   p4.1       nginx:latest   mike-VirtualBox   Running         Starting 32 seconds ago             
+fbis8eemo8h6    \_ p4.1   nginx:latest   mike-VirtualBox   Shutdown        Complete 37 seconds ago             
+
+
+
+
+
+nice all the errors came out from that i use postgres and not nginx so now we are ready to and of course we need to create the service before we create the container 
+so 
+
+sudo docker service create --name p1 nginx  or    sudo docker service create --name p2 --health-cmd="pg_isready -U nginx || exit 1" nginx
+
+and then 
+
+sudo docker container run --name p1 -d nginx or   sudo docker container run --name p8 -d --health-cmd = "pg_isready -U nginx || exit 1" nginx
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service create --name p1 nginx
+hd9xexklfh5eoqc68w28qjkry
+overall progress: 1 out of 1 tasks 
+1/1: running   [==================================================>] 
+verify: Service converged 
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+Unable to find image 'nginx:latest' locally
+latest: Pulling from library/nginx
+Digest: sha256:2bcabc23b45489fb0885d69a06ba1d648aeda973fae7bb981bafbb884165e514
+Status: Downloaded newer image for nginx:latest
+docker: Error response from daemon: Conflict. The container name "/p1" is already in use by container "fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7". You have to remove (or rename) that container to be able to reuse that name.
+See 'docker run --help'.
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+
+
+and of course the containers that are based to nothing become dangling containers and its impossible to deleted with the original way and thus deleted at the time they showed up 
+
+so 
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container rm -f fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7
+fa830494edd58d9753bf89eafaf13b5a0c893655c4d1bf68d4655b03cc9adca7
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container run --name p1 -d nginx
+193dd002dd5d6dc45e91dad39f3023cc52ece404158a19f5edfd7468937f824b
+mike@mike-VirtualBox:~/Desktop/somewhere$ 
+
+
+
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker container ls
+CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS          PORTS     NAMES
+193dd002dd5d   nginx          "/docker-entrypoint.…"   22 seconds ago   Up 21 seconds   80/tcp    p1
+9cb994d38956   nginx:latest   "/docker-entrypoint.…"   4 minutes ago    Up 4 minutes    80/tcp    p1.1.hse2rh8j6ex8mzs34juvs98m1
+mike@mike-VirtualBox:~/Desktop/somewhere$ sudo docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE          PORTS
+hd9xexklfh5e   p1        replicated   1/1        nginx:latest   
+mike@mike-VirtualBox:~/Desktop/somewhere$ 
+
+25--------------------------------------------------------healthchecks in dockerfiles-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                           section 5                                                        
+                                                                      swarm app lifecycle
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+                                                                            section 6
+                                                              controlling container placement in swarm
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+26--------------------------------------------------------section overview: 5 ways to control container placement-------------------------------------------------------
+so here we are going to focus on the swarm tasks or the containers,  how they get placed, how do you control which nodes are actually put on...
+because up untill now we've just been deploying them and the go wherever they decide to go , 
+but there is actually a lot of built in the swarm onn how you can control where those go based on the scheduler, 
+before we get started let me just tell you the quick requirements for this whole section, you actually need to have that three node swarm.
+you can have more than three nodes if you want to play aroun d with more....but you need a 3-node swarm to get started.
+in that specific swarm you need one manager and two workers.
+Really what you just need is.......you need some machines that aren't managers so in my set up i am going to nhave one manager and tow workers so that i can control the difference between 
+the two.
+and you want to clean everything out....so in previous sections you probably did some cool stuff  and you might have some leftover services or containers 
+so you really want to go through and clean out all your stacks, your services, your containers, your volumes and your networks except for the one that you set up at the beginning of this course,
+the visualizer.....the visualizer is a part of this course, ongoing, so if you accidentaly deleted the service for it you can just run back to that visualizer lecture in the 
+previous sections and just recreate that real quick with a cut and paste.
+
+|-------------------------------|
+|controlling container placement|
+|-------------------------------|
+
+so here lets learn how containers get placed through the orchestrator...so there is actually this engine that's happening in the background and it's making decisions all the time,
+every second multiple times a second, around do you need more tasks, does the service that you've asked for have all the tasks that you've asked ?
+the number of replicas,. so if you have five replicas that you've asked for a service its always making sure that those five are running and the are running where you've asked them to run.
+now by default up until this point in the course yu haven't worried about where they where running, we've always just started the service, or the stack and it created the services and the tasks that belong 
+to those wherver they could fit, and that's an actual default that we can change a lot of it.
+so the default is to spread the tasks out, the containers are the same thing as a task, there's a 1-to-1 relationship there, 
+so when you're setting up a service and you pick five replicas let's say those five replicas are going to be spread out on so mnay nodes as it can spread them out on by default, and it will also
+try to use the least used nodes as well.
+But it will make a priority around dispersing your tasks in the service because it assumes you want fault tolerance and high availability so it;s going to spread those out to as 
+many nodes as possible.....but there is many ways we can use to control where these tasks place their containers.
+and a lot of these options can actually be used together for really complex requirements.
+so in this sections we are going to go through five major areas that you can control how a container gets placed on a node.
+
+and the first one there is what i will call service constraints, 
+its a combination of features where it uses metadata on the nodes and then when you create a service, you actually apply a constraint to it saying it has to have a specific 
+label in order to run that service task...right? ....." #1 node labels plus service constraints (<key>=<value>)"
+
+the second option  there are service modes and you might have even seen that in the interface when you  do a docker service ls, you actually get to see the service mode which up untill now has 
+always been replicated, but there is another mode that we will talk about in a little bit called global......" #2 service modes (replicated|global) "
+
+the third option here is placement preferences which is a pretty new feature.
+placement prefeences is a soft requirement, meaning that if it can't fulfill this requirement it will still go ahead and create the task  somewhere,
+it just  won't be put where you would prefer it and the placemet preferences are really good for spreading out maybe across racks or data centers or availability zones.
+and we will talk about that in a minute......"#3  (new in 17.04+) placement preferences (spread)"
+
+the fourth option is node availability, so you can actually control on a node by nodel level whether it is even available for new tasks to be scheduled on it  and we talk about 
+the options there......"#4 node availability (active|pause|drain)"
+
+
+and then lastly we have resource requirements, so you can actually tell a service that it needs a certain amount of cpu or memory, and the schedulere will make sure that whatever node you are putting
+it on has that cpu or memory available and if it doesn't it won't schedule it there..."#5  resource requirements (cpu|memory)"
+26--------------------------------------------------------section overview: 5 ways to control container placement-------------------------------------------------------
+
+27-------------------------------------------------------service constraints-------------------------------------------------------
+   
+|---------------------|
+| service constraints |
+|---------------------|
+
+
+   -can filter task placement based on built in or custom labels
+   okay this lecture is going to talk all about service constraints which is one of the ways we control service task assignment to which node. 
+   and its really a simple key value matching algorithm.
+
+   -can be added at create time, or add/remove at update time
+   it can actually use labels that are either built in to swarm and the docker engine or custom that you  apply at any time during your service life cycle.
+   for assigning the constraints you can actually do that at service creation time but you can also do it at the time of update, so when you are changing something about your service, 
+   you can also change the constraints and we do that by removing existing ones and adding new ones.
+
+   -creates a hard requirement, placement fails if not matched
+    this is actually a hard requirement which means if you don't get a match, if you set a constraint on a service that can't find a node that  matches it then it will not deploy that task, it will
+    basically have the service sitting in a pending statre forever.
+    
+    -supports multiple constraints
+     you can assign multiple constraints to the same service, and that allows you to set up some pretty complex scenarios, and this one of the key ways we can create large swarms with diverse infrastructure 
+     and still manage it in one swarm with different services going to different places.
+
+     -support either a <key> or a <key>=<value> pair   
+     and when we create that constraint on the service we can ask it to just look for a key and whether or not that metadata key exists on the node or a specific value on that key.
+     and we will see some examples in a minute.
+
+     
+-can match with == or !=
+you can use an equal assignment or a not assignment so true or false, you can force those in the assignment just like you do with most programming languages and the labels are 
+coming from two different areas....we talked about that they come from either built in labels or from custom labels that you create.
+but those labels actually  themselves  have two differ4ent groupings, and one of them is a node label, which is actually stored in the raft database itself,  
+and there is the engine labels which are created in the daemon JSON file on each node where you actually go into the docker engine config and you assign the engine labels inside there,
+we will talk a little bit about why those are different, and why you may want to use one or the other on and off here in this example.
+but really the gist there is that engine labels are little bit harder, right ? you have got to set them, you have to go in and actyually change the config and restart the docker daemon.
+
+-labels can be node.labels or engine.labels
+--node.labels only added via manager to raft log
+--engine.labels added in daemon.json to any node {"labels": ["dmz=true"]}
+--default to using node.labels, use engine.labels for autoscaling hardware, os
+
+so i usualluy prefer node labels unless i maybe have some scenario where its not easy for me to jump on a manager and create a node label. 
+because a node label command is a swarm command, it has to be done a manager node and i have to be someone who has permissions on there, so  
+maybe if you are doing autoscaling of your hardware in aws and you want to create some labels for that specific node, like maybe it's in the DMZ and you want to assign it a DMZ label 
+well those might be good to put in the engine config, because you can really do automation pretty easily  with that when you are setting up instances in the cloud.
+but node labels are really great for an administrator typing those in and defining key parameters about specific infrastracture that we will talk about here in a few minutes. 
+
+
+|----------------------------|
+| service constraint example |
+|----------------------------|
+
+so a couple of basic examples on what we are doing here.....
+
+
+-place only on a manager (2 options for same result)
+  --docker service create  --constraint=node.role == manager nginx
+  --docker service create --constraint=node.role != manager nginx
+
+the first one here, actually these two lines result in the same outcome.......so you can see where i am doing a docker service create and i am using the node.role constraint and 
+that label is...ships out of the box, and the way we know that is that it doesn't say the word labels in it.....so anything that's node.labels or engine.labels is something that we use custom
+that we've created custom by a human, but the .something else in this case the role value or key rather the node.role key is built in out of the box  value, 
+and so here........(docker service create  --constraint=node.role == manager nginx) we are asking it to only deploy 
+the first line onto a node that is a manager, and on the second  line we are basically say the same thing, we are saying deploy this service task to a node that is not  a worker 
+
+there are only two types in a swarm...managers and workers, so these two results in the same effect, but it shows you the example of how you can use both of those 
+
+
+-add label to node2 for dmz=true, and custom to it
+ --docker node update --label-add=dmz=true node2
+ --docker service create --constraint=node.labels.dmz==true nginx
+
+  here in the second example we have us adding a label and you will notice that we do a docker node update, that's how you control labels on a node, you can actually use the label-add or the label dash-rm. 
+  you will see in that first line that i am adding a dmz=true requirement to node2, or i am adding the label for that, should i say
+  and in the second line i am doing a docker service create and i am telling it that the constraint is that this nginx service has to run on a node that has the label dmz and that that label is marked true 
+    
+  so lets actually see this in action and play around with some of the options e.g we are going to our cmd on windows, so we are on our swarm 
+
+  as we have delete everything and recreate them from the start
+
+  
+
+
+
+C:\Users\michael.kourbelis>docker swarm init --advertise-addr  192.168.99.117
+Swarm initialized: current node (3ubg17u15nc3duc28f5oyqsd6) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-4omlhjm2yqxq4rhsf1o9y0tdhicy7yio3omlx9h94eru1pxh5s-aldd95uqjsd3reprh4rqupylu 192.168.99.135:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+
+C:\Users\michael.kourbelis>docker-machine create i
+C:\Users\michael.kourbelis>docker-machine create ii
+C:\Users\michael.kourbelis>docker-machine create iii
+
+C:\Users\michael.kourbelis>docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+3ubg17u15nc3duc28f5oyqsd6 *   default    Ready     Active         Leader           19.03.12
+
+
+this is because i don't have them add to the swarm............................................
+
+
+
+C:\Users\michael.kourbelis>docker-machine ssh i
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@i:~$ docker swarm join --token SWMTKN-1-4omlhjm2yqxq4rhsf1o9y0tdhicy7yio3omlx9h94eru1pxh5s-aldd95uqjsd3reprh4rqupylu 192.168.99.135:2377
+This node joined a swarm as a worker.
+docker@i:~$ exit
+logout
+
+C:\Users\michael.kourbelis>docker-machine ssh ii
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@ii:~$ docker swarm join --token SWMTKN-1-4omlhjm2yqxq4rhsf1o9y0tdhicy7yio3omlx9h94eru1pxh5s-aldd95uqjsd3reprh4rqupylu 192.168.99.135:2377
+This node joined a swarm as a worker.
+docker@ii:~$ exit
+logout
+
+C:\Users\michael.kourbelis>docker-machine ssh iii
+   ( '>')
+  /) TC (\   Core is distributed with ABSOLUTELY NO WARRANTY.
+ (/-_--_-\)           www.tinycorelinux.net
+
+docker@iii:~$ docker swarm join --token SWMTKN-1-4omlhjm2yqxq4rhsf1o9y0tdhicy7yio3omlx9h94eru1pxh5s-aldd95uqjsd3reprh4rqupylu 192.168.99.135:2377
+This node joined a swarm as a worker.
+docker@iii:~$ exit
+logout
+
+C:\Users\michael.kourbelis>docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+3ubg17u15nc3duc28f5oyqsd6 *   default    Ready     Active         Leader           19.03.12
+3jolccxxxvzw28lkzkhmfh2pe     i          Ready     Active                          19.03.12
+g14k1qj2mt7i94gm9wt4p0pgd     ii         Ready     Active                          19.03.12
+a2f14pc5r70b0sx4k04rt80f1     iii        Ready     Active                          19.03.12
+
+C:\Users\michael.kourbelis>
+
+
+so now we can see that we have four nodes in our swarm and one of them is the leader-manager
+and then also i am running the visualizer, so if i go to my browser and hop over to my manager node on port 8080
+i can see that 
+
+
+ the ip of the swarm  you
+are going to see the visualizer that shows that you ve got the three nodes 
+and the visualizer is running on the manager node on port 8080 we see the three nodes 
+and the visualizer is running on the manager node as it should 
+
+so i  our first example letá actually use a  built-in label like we talked about, the node.role, to force nginx 
+to run on a worker 
+
+
+......docker service create --name app1 --constraint node.role==worker nginx........
+
+
+and now if we go back to our visualizer we will see that our app1 is running on the worker 2
+
+now if i didn't specify that constraint i would still probably run on a worker because swarm prefers to spread out workloads and not assign 
+everything to the same box.
+and since visualizer was already running a node 1 it probably wasn't going to assign app1 to the manager, 
+but i can force it over there......
+
+so lets do a service update command where we actually remove this constraint and add a new one, now you can't change an existing constraint 
+you can only add and remove and as you see we make a remove with rm and then add app1 to the manager node 
+then if we go back to our visualizer we see that app1 runs on the manager node 
+
+....docker service update --constraint-rm node.role==worker --constraint-add node.role==manager app1 
+
+
+
+and we will see in a minute that there are a lot of built in options.
+i can actually specify the node name or the  node id, if i wanted to hardcoded the specific node, but for now LETS  leave THAT  there 
+and we are now going to add a label a custom label to one of our nodes and we do that with a docker node update 
+and we do that with a docker node update....
+and so in the same way as before, with the service update command we can only add and remove so we add
+
+docker node update --label-add dmz=true (and we assign that to node2) node2
+
+and when we do that we see in the visualizer we have this nice little graphic that shows the custo labels that we have assigned, so you will see that 
+thw dmz = true, so lets imagine that we have a workload that has to run dmz , maybe its an nginx reverse proxy that needs to run in a specific 
+virtual network or maybe its an aws and it needs to run in a specific network there, so lets do docker service create, we will just call it 
+dmz nginx 
+
+....docker service create....
+and we will just call it dmz-nginx and we will assign it a constraint.... 
+--name dmz-nginx --constraint node.labels.dmz==true --replicas 2 nginx
+
+
+docker service create --name dmz-nginx --constraint node.labels.dmz==true --replicas 2 nginx 
+
+and remember that anything that has the word labels in it goes in an array of custom labels that we have assigned to this service, 
+so anything i do beyond this, is going to be whatever format i want to use for my proper labeling. 
+And we will actually have a lecture later on labeling all the different things you can label in a swarm and the 
+proper way to label those and some of the best practices 
+but for now we are just going to say.....dmz==true.....
+so in the exact command above what we are saying is that we want to make sure that not only is the dmz label there, but it also has a value of true 
+and i want add 2 replicas, and we are going to run nginx again at the end, you can  see that both of these replicas are running on the same 
+worker that has dmz equals to true.....and that's against the default setup right?
+
+because if we didn't have that constraint in place it would naturally want to make sure that it spreads out those tasks and it assigns a container
+per node versus what we just set up here which was to force them on the same 
+
+
+|-----------------------------------|
+|service constraints in stack files |
+|-----------------------------------|
+
+version: "3.1"
+services:
+  db:
+    image: mysql:5.7
+    deploy:
+      placement:
+        constraints:
+          - node.labels.disk == ssd
+
+
+what we have here is a stack file and you will see that it's very similar to the service create and service UPDATE COMMANDS, 
+so the above is an example of maybe i have  a service called db, and its running a mysql image and i have a specific infrastructure 
+that i have added ssds to, so what i've done is i've gone in and i've added a label to the specific node that i basically gave it a label 
+of disk equals ssd 
+
+
+so what i am telling this stack file is that only deploy that db service onto a node that has the disk label and its value is ssd 
+so it works the same way as the service commands, 
+because again the stack themselves are really just in the background creating  service commands for you.....so we would expect them to function the same way.
+
+
+|-----------------------------------|
+|service constraints:build-in labels|
+|-----------------------------------|
+
+node.id (listed in docker node ls)
+node.hostname (listed in docker node ls)
+node.ip (e.g. 172.168.99.0/24)
+node.role (manager|worker)
+node.platform.os (linux|windows|etc)
+node.platform.arch (x86_64|arm64|386|etc.)
+node.labels (empty by default)
+*might be others out there but not well documented
+
+
+above its a handly list of some of the built in labels, these are all node labels that come out of the box and you can see down at the bottom like the node.labels 
+is empty by default because that requires you to add custom ones in there, but you can see that we have 
+like the id of the node the host name of the node, you can actually get the ip of the node, the role and then what platform OS is running 
+and the architecture  whether its 32 bit or 64 bit....an arm that sort of thing 
+there is might be other labels out there or engine labels out of the box in specific situations, but a lot of this isn't well documented,
+so if you need to get into this stuff you are going to have to maybe experiment with labels and see if they work and maybe dig into the code a little bit 
+to figure out what might be hiding in there as the platform matures 
+
+
+and just rememebr use the following commands to clean up after this lecture in order to start fresh 
+
+---remove the service and labels we created 
+.....docker service rm app1 dmz-nginx
+.....docker node update --label-rm dmz node2
+27-------------------------------------------------------service constraints-------------------------------------------------------
+
+28-------------------------------------------------------service commands-------------------------------------------------------
+
+service modes....notice it in docker service ls 
+-----------------------------------------------
+okay now that we have worked with constraints a little bit lets look at the next option for controlling container placement, 
+
+default to replicated, but global is an option
+-----------------------------------------------
+and that is sevice mode, service mode has actually been there all along, you've been using the default, which is a replicated mode.
+you can see that with docker service ls command...you actually see a column there that tells you, and its always saiys "replicated".
+
+global=one task per node 
+------------------------
+but there is another option, the global option and we are going to play with that here, it basically is the opposite of what replicated mode is.
+replicated mode has always been where you default out of the box with docker service create.
+it will make one replica or one task or one container....same thing.
+when you say replicas 10 it will create 10 containers and spread those out on as many nodes as it can in your swarm....and global is the opposite of that  
+global says there are no replicas, you can't specify replica, but instead i am always going to put one container on every node, hence the world global....
+so its actually very useful to use that in several different situations....but you can do this at service create time...
+unfortunately the feature right now does not allow you to use a service update to change your mode.
+so make sure you know what mode you want when you put a service into production. it's really good there for security tools or monitoring tools 
+or maybe a web proxy that you want on every single node in your swarm or a backup option.
+Really i look at this as global mode is when it's replacing the idea that i would usually have, before containers, of an agent that runs on every system,
+and lots of times the most common example might be a pci compliance tool that needs to run on every one of your nodes because you run credit card transactions.
+so in order to run those in a container without having to specify the replicas to match the magical amount of service nodes....so for example maybe you have 10 nodes 
+in your swarm and up until now you ve been specifying replicas equals 10 because you needed that on every single node.
+
+well one thats not going to guarantee that they are always going to have one on every single node.
+and if you change the number of nodes it could either miss a node or have two on one node....its not perfect right;
+so when you need to guarantee one on each node......that's when you use global.
+
+in 1.13 we got a bonus with global mode, where it can actually be combined with constraints and this means that you can actually tell it, i want one on 
+each node but only with a small subset or a specific subset, on my swarm that identifies what this constraint...and we will see that in a second 
+so real quick before we go to the command line and play with this, just a couple of basic examples
+
+
+the first one here is the simplest way to use it....place one task on each node in swarm 
+.....docker service create --mode=global nginx
+
+here as you notice i changed the mode from the default replicated to global and i am going to use the nginx and its basically going to put an nginx container
+on every single node in the swarm 
+
+
+
+
+the second option combines that with an additional constraint...so this is using the worker role constraint, which means that this will only work 
+or this will only apply to nodes that are in worker and not to a manager node, so when i look at this in a second, you will see that it doesn;t put a 
+container on a manager node....it's very handy, 
+.....place one task on each worker in swarm.....
+docker service create --mode=global --constraint=node.role==worker nginx
+
+
+okay lets see how these work on the command line, before we do real quick, just to make sure check out your visualizer if you don't have it up already 
+and make sure that you have everything cleaned up from the previous section.....
+
+lets make review because i cannot see the visualizer.....from the ip......
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+28-------------------------------------------------------service commands-------------------------------------------------------
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                           section 6                                                       
+                                                               controlling container placement in swarm
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
