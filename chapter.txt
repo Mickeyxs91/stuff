@@ -4218,6 +4218,277 @@ and that's a coomand that is roughly equivalent to the grep command and it will 
 be sure to clean up by reomving the stack we created.....docker stack rm vote
 
 33-----------------------------------------------------service logs: when to use them and their limits----------------------------------------
+
+34-----------------------------------------------------docker events and viewing them in swarm----------------------------------------
+
+in taking care  of your swarm you are going to have logs that we have talked about and other things you got deal with and one of those is using docker events.
+you definitely  if you havent check this feature out because it can be quiet handy in figuring out what's going on in my swarm right now............
+
+--actions taken logs of docker engine and swarm
+.....e.g. "network create", "service update", "container start"
+
+its not quite an event log....its more of an actions taken log of the engine and swarm, so its deliberate events that the engine is taking and it;s going to log thise in a quite,
+friendly wat for both computers and users, it's actually a little bit legible but it is meant to be consumed by the API of something else or like a logging system or monitoring system that yopu might be using,
+
+- docker events received swarmkit events in 17.06
+.....services/nodes/secrets/configs got create/update/remove
+
+but there is a command line for it.... 
+so the docker events commands line alows you to see, not just swarm events, but everything about what's  going on in docker.....
+this isn't necessarily going to solve al of your logging problems write because they still have service logs about things that are going on inside your containers.
+then we still have the daemon logs which are running in docker "-d" to journal of your linux system or windows events logs of your windows system, 
+those are the places that talk about the low underlying binary and what service is doing on your system like if it gets access deinied, the file systems and stuff like that, that's not what docker 
+events is.
+Docker events is sort of a clean list of the actions it's taking on networks and services and containers inside your system 
+
+-has searching (filtering) and formatting 
+it has that nice searching features and formatting features so unlike the service logs, we actually get to search it and allow some basic filtering out of it 
+
+-limited to last one thousand events (no logs are stored on disk ), so one of the negative things about it is its not a long term log stored on disk, 
+it's really more about real time events with a little bit of history in case you forgot to maybe run the command and you need to check from five or ten or twenty minutes ago or something, 
+but if you have got a big swarm, a thousand events could happen pretty quickly,  so its not going to store those very long, 
+so what i use it for is usually when i am testing something locally i am testing functionality as i want to make sure it works right....i want to make sure that swarm is executing things the 
+way i expect it......
+i can actually watch the engine and swarm do their work.....you know creating containers and creating networks and stuff like that in real time.
+
+--two scopes, local and swarm 
+it's got two scopes that you really need tyo understand before you start using it, in a swarm  you are going to be able to see the swarm events on a swarm manager which is nice because you can 
+see  the events that are getting taken for the entire swarm, but you will soon realize that that's not very much of what's actually happening- that the swarm orchestrator and scheduler 
+themselves aren't really deciding  a whole lot...they will maybe decide where the tasks need to go but once that lower level activity needs to happen, like networks created on specific hosts and 
+containers created on specific nodes, those things won't be showing up in the swarm scope, the will whow up in the local scope.
+the local scope is only on the node that it happens, 
+which means if you have a bunch of workers and a couple of swarm managers, you can't just watch the events on one manager.....you have to watch them on every node that mighht get work.
+that might can be a liitle tricky when you are diagnosing a large problem so  i don't have a complete solution if you are in a hundered node swarm and you want to do the docker events and see what's 
+going on everywhere 
+quite frequently that would be too much for your screen and you would be able to see what's happening, so you are definately going to need a logging system as we will get into later in this course on long term
+storage of that, if you really need to see a larger swarm's activity as it's happening,
+
+--not the same as dockerd (journald) log, also swarm's activity as it's happening
+
+this is also not the same like i said as the docker "-d" that is going to talk about lower level 
+functionality like containerd actually launching containers at the low system level and user IDs and file permissions problems and network errors, those are all going to be happening in real time 
+in the journald logs  like   any daemon would on a linux system. 
+also using it in windows would be the event logs.
+the docker events is not an error log, so you are really talking about three types of logs acrosss your whole system
+you are talking about the low level daemon logs of the docker engine, you are talking about these docker events that are sort of an  action or a counting of the things that are taking place 
+and decisions being made in your swarm 
+and thyen even at a higher level, the application logs that we are using the service logs command for at each container.
+those three areas are really will combine along with a few other ones that we will talk about later, including metrics that might be the complete solution for logging and understanding of 
+what's going on in your swarm....
+
+lets dive in to some examples 
+
+docker events examples
+
+1. follow future events (docker events)
+
+here we just type.....docker events 
+which will give as real time stream starting now, swo its not goin g to dump a bumch of stuff to your screen, its just going to start at this instance and listen on the nodes you are on.
+note...that node is just a worker, its only going to see local events 
+if it is a manager it will also see the swarm events, it wont be clear necessarily which one is local, which one is swarm, so you will have to learn about the different types of events as you 
+are seeing them scroll through your screen, you can also filter by those as well, as we will show in a minute   
+
+2. return events from a date until now and future [(docker events --since 2017-12-01)...(docker events --since 2017-12-01T12:30:00)]
+the second example shows a date-base search in the past.....so it allows us to specify a date in time, even the hour up to the second an a specific date format, 
+and i want to point you in the references to the actual documentation page for this docker events command because there is lots of formats for different variations of this,
+i ddn't want to give you all the examples you could possibly use but there is epoch-based dates....
+
+3. return events from 30m ago until now and future [(docker events --since 30m)...(docker events --since 2h10m)]
+there even go based dated so you can do go template which is quite human friendly, you can say docker events --since 30 minutes ago or since 2 hours and minutes ago
+assuming that your events go back that far because, remember there is only a thousand of them on each server stored, you are going to be able to use that and honesty that when i am using it 
+i am using these easier 30 minutes ago ones....i don't like typing up the long dates. 
+
+that's more for maybe an API call that you might do with some other program....
+
+4.return last hour of events filtered by event name (docker events --since 1h --filter event=start)
+  here is an example of using docker events to show everything since the last hour  but applying a filter of obly showing me the start events and that will pertain to specific objects   
+  that have the type start, and again look at the documentation becauser there is dozens o dfferent types of events that happen, 
+
+5.only return swarm related events for networks (docker events --since 1h --filter scope=swarm --filter type=network) 
+and lastly we have an option here where we do --since 1h ago and we are going to filter to only swarm events and we are going to add a second filter of type=network 
+so it's an interesting thing here is that i can use multiple filters to get more and more granular on my events and that in a bigger swarm is really important because if you are going to try to watch something 
+happening when you've got hundreds and hundrerd of containers you are never going to see what's going on if you just watching everything......you are going to have to keep using that filter to scope 
+it down more and more.
+
+now if you do use a filter with the same key maybe you say....--filter type=network --filter type=container
+and those would actually act like an  "or" so you would see both of those at the same time, but in our case, because we are using two different filter keys so i am using a key scope and a key of type 
+those are going to act like an "end" which means they both have to be true for me to show that event.....read the documentation for more information on that....
+
+
+nowe lets go to the command line to write the real deal...by the way you should have a clean swarm here where only the visualizer is running
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ok set up again your visualizer and you should have not anything else excpet of your 3 machines on your swarm 
+
+
+docker run -it -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock dockersamples/visualizer
+
+
+
+C:\Users\michael.kourbelis>docker swarm init --advertise-addr 192.168.99.135
+Swarm initialized: current node (z13853l3yzp7xhh664zp50clj) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-2eu98nsqsm6vwlbwv2p6ahlxydnhqiwphscwwu1ixabst97sqi-18qcl3lm59q1s6c3443pot8mi 192.168.99.135:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+
+C:\Users\michael.kourbelis>
+
+
+
+
+
+C:\Users\michael.kourbelis> docker run -it -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock dockersamples/visualizer
+0d77a8da6ea644e6d7da824a0ef3fed72695a647ac44b227079b40f463cc6bd5
+
+192.168.99.135:8080
+
+
+
+C:\Users\michael.kourbelis>  docker-machine create i
+C:\Users\michael.kourbelis>  docker-machine create ii
+C:\Users\michael.kourbelis>  docker-machine create iii
+
+C:\Users\michael.kourbelis>  docker-machine ssh i
+ docker swarm join --token SWMTKN-1-2eu98nsqsm6vwlbwv2p6ahlxydnhqiwphscwwu1ixabst97sqi-18qcl3lm59q1s6c3443pot8mi 192.168.99.135:2377
+C:\Users\michael.kourbelis>docker-machine ssh ii
+ docker swarm join --token SWMTKN-1-2eu98nsqsm6vwlbwv2p6ahlxydnhqiwphscwwu1ixabst97sqi-18qcl3lm59q1s6c3443pot8mi 192.168.99.135:2377
+C:\Users\michael.kourbelis>docker-machine ssh iii
+ docker swarm join --token SWMTKN-1-2eu98nsqsm6vwlbwv2p6ahlxydnhqiwphscwwu1ixabst97sqi-18qcl3lm59q1s6c3443pot8mi 192.168.99.135:2377
+
+ --------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ we are actually going to start here by stopping the visualizer so that we won't have any events happening on our swarm and the way we can do that is instead of removing the service 
+ because then if we did that we would have to re-add it again later.....
+ we can actually scale it down to zero, with the command
+ docker service scale viz=0
+ *  and we call it viz, if you call it something else you will need to change that...and here we equalize viz to 0...it will take down the existing replica and leave the service in existence 
+ but it won't have any replicas 
+
+
+
+C:\Users\michael.kourbelis> docker service scale viz=0
+viz: Error: No such service: viz................................i want linux
+ 
+so it will take down the existing replica and leave the service in existence but it wont have any replicas
+of you do docker service ls then you will see that i have 0/0 replicas, so thats a preety neat trick so that we can quickly spin that container back up here in a few minutes when we are done,
+
+take a few moments and in your setup you are going to want to open up multiple terminal windows if you really want to get a sense for what's happening on each node.
+what i've got here is i ve got on my left 
+
+
+
+docker service create   --name=viz --publish=8080:8080/tcp --constraint=node.role==manager --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock  dockersamples/visualizer
+
+C:\Users\michael.kourbelis>docker service create   --name=viz --publish=8080:8080/tcp --constraint=node.role==manager --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock  dockersamples/visualizer
+s2xd5dh7tvsrlz6x5x7cwdsos
+overall progress: 1 out of 1 tasks
+1/1: running   [==================================================>]
+verify: Service converged
+
+
+
+
+
+so i dont want linux but to replace this 
+
+docker run -it -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock dockersamples/visualizer 
+with this 
+docker service create   --name=viz --publish=8080:8080/tcp --constraint=node.role==manager --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock  dockersamples/visualizer
+
+as the error above tells us that we haven't a service call viz so we google 
+
+docker swarm create service visualizer
+and we go to here 
+https://dockerlabs.collabnix.com/intermediate/workshop/getting-started-with-swarm.html
+
+and find the command above 
+
+
+
+
+C:\Users\michael.kourbelis>  docker service scale viz=0
+viz scaled to 0
+overall progress: 0 out of 0 tasks
+verify: Service converged
+
+C:\Users\michael.kourbelis>
+
+
+with the command above we actually stop the visualizer so that we won't have any events happening on our swarm
+and the way we can do that is instead of removing the service, because then if we did that we would have to re-add it again later, 
+we can actually scale it to down zero by setting viz tp 0 and then it will take down the existing replica and leave the service in existence but it won't have any replicas 
+and if you do a docker service ls....then you will see that i have 0/0 replicas 
+
+C:\Users\michael.kourbelis>docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE                             PORTS
+s2xd5dh7tvsr   viz       replicated   0/0        dockersamples/visualizer:latest   *:8080->8080/tcp
+
+C:\Users\michael.kourbelis>
+
+
+so that is a preety neat trick so that we can quickly spin that container back up here in a few minutes when we are done 
+take a few moments and in your setup you are going to want to open up multiple terminal windows if you really want to get a sense for what's happening on each node.
+what i've got here is i've got on my left i am going to have where i am running my commands and then i will be on node i ii and iii 
+and have each one scoped to each node and your swarm , so that way what we are going to do is we arte going to type 
+docker events with nothing filtering on each one of these 
+
+and then in our original window (now  i want linux.......)
+for node i we are going to create a docker service create and call it nginx......docker service create --name nginx nginx and 
+what you should see is on the right you will see at the top   remember that node i is my manager node....i have one manager and that's node i 
+and the service create is a swarm specific command  and so that's happening on my swarm manager but then on node2 we will see all the details, we will see the container create 
+we will see network create, container start 
+
+so now we know that basically the swarm decided that the node ii should start this container.
+that's where those local node activities are going to happen 
+
+you will notice that node ii has nothing.....it didn't even notice that anything happened 
+
+lets kill the nginx service......docker service rm nginx 
+and we should see the same thing happened 
+up to the top i see service remove and at the node ii  
+i see container destroy, container stop, network disconnect and there are a lots of metadata here obviously about each one inside our parenthese. 
+now rather thatn having you typing all the same commands that we just typed because those are pretty simplistic and i encourage you to type a few on your own,
+but for  the shake of time lets do something quite interesting here and see what happens when we take that previous command of docker service create for limiting memeory 
+            
+so docker service create (and here lets jsut do something interesting. instead of just going through a bunch of different filter options like you saw in the examples lets actually 
+create something that fails. so that docker service create --limit-memory=100M......remember this one where we actually use the stress inage a few minutes agoe ? and call 
+it 100 hundred and then we rae going to use the bretfisher/stree:256m )
+
+in a nutshell 
+
+docker service create --limit-memory=100M --name 100 bretfisher/stress:256M
+
+so what this is doing remember is we are actually going to limit the amount of memory this container  can use to 100 but we are going to ask the container to try to use 
+256 and its going to fail
+
+so it actually kill itself and have to be restarted somewhere else, so you can see it with the top again, we get the service create command but what you can see happening is actually on these other nodes,
+we've got container creates, we have got container fails, container dies....that's a new container die and then container oom....
+so that we are actually getting this special event called an out of memory
+event that creates a process to  kill the container, remove the container, remove the network and then pick the next best place to put it, it may be on the same node =, 
+it may be on a different node.
+you can see its what's happening here as this container keeps trying to re-deploy itself, the nodes are actually getting assigned and each one of them at some point 
+has been getting assigned to this particular task, and if we go ahead and hit ctrl+c on our docker service create and then try to remove it,
+docker service rm 100 then eventually we will see that no more logs will happen, all of these containers on these other nodes will stop, the last thing we will do here is we are going to 
+scale back up our visualizes.......docker service scale viz=1...13 03
+
+
+
+
+
+
+
+
+
+34-----------------------------------------------------docker events and viewing them in swarm----------------------------------------
+
+
+
+
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                         section 7                                                      
                                                          operating docker swarm in production
