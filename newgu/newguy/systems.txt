@@ -1,0 +1,27 @@
+
+Stage docker admin password
+!QAZ2wsx#EDC4rfv
+
+
+http://pp-docker-01.peoplecert.org:7081/stats;st=DONE .......haaproxy
+
+
+
+portainer.....
+https://stage-docker.peoplecert.org/#!/auth
+
+DOCKER Portainer admin password
+!QAZ2wsx#EDC4rfv
+
+
+https://jenkins.peoplecert.org/login
+username: admin
+
+password: 1q2w3e4r
+
+https://login.wrike.com/login/?redirectUrl=%2Fworkspace.htm%3Facc%3D805758%23%2Finbox%2Ftask%2F861411071
+
+
+monitoring tools
+
+https://oms-inter.azurewebsites.net/rnd.html
